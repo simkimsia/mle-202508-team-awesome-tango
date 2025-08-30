@@ -75,3 +75,4 @@ After your PR is approved and merged:
 - After merging, your commits will be rebased on top of main
 - This keeps our git history clean and linear
 - Make sure to pull the latest changes from main before deleting your branch
+- We disallow merge commits. We want linear commits. This is to make it easier to trace the history. Yes it's more time consuming, but in a school project and fresh repo, it's not as bad. See [this post](https://stackoverflow.com/q/20348629) for details.
