@@ -10,7 +10,7 @@ By surname order
 2. CHEN Zhiyang
 3. LIN Xiongqing
 4. Justin NG
-5. SIM Kim Sia
+5. SIM Kim Sia (@simkimsia)
 
 ## Contents
 
