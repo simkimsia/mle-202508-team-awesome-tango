@@ -12,7 +12,7 @@ Turbofan engine degradation is fundamentally a **time-dependent process** where 
 
 ### Multi-variate Time Series Complexity
 
-The preprocessed dataset contains 18 sensor measurements collected over operational cycles, creating a complex multivariate time series where:
+The preprocessed C-MAPSS dataset contains 18 sensor measurements (after data selection removes non-informative sensors as described in README.md, lines 163-171) collected over operational cycles, creating a complex multivariate time series where:
 
 - Multiple sensors exhibit interdependent behavior
 - Sensor relationships evolve as degradation progresses
@@ -22,8 +22,12 @@ LSTM excels at learning these complex relationships between multiple time-varyin
 
 ### Variable-Length Sequences
 
-Engine lifecycles vary significantly (ranging from 156 to 362 cycles based on dataset analysis), requiring models that can handle:
+Engine lifecycles vary significantly in the C-MAPSS dataset. According to the dataset documentation:
+- **Shortest engine lifecycle**: 31 cycles (README.md, line 353: "the shortest record in the dataset is 31")
+- **Sample engine lifecycles**: 179, 192, 287 cycles (README.md, lines 247-249, showing maximum cycles for engines 1, 2, 3 respectively)
+- **Range variation**: Engines can operate from as few as 31 cycles to nearly 300 cycles
 
+This variability requires models that can handle:
 - Different degradation rates across engines
 - Varying operational histories
 - Non-uniform pattern emergence timing
@@ -34,7 +38,9 @@ LSTM's gating mechanism provides the flexibility needed for this temporal variab
 
 ### Window-Based Sequential Structure
 
-The dataset employs 30-cycle sliding windows, creating sequences where **temporal order is crucial**. Traditional machine learning approaches would treat each timestep independently, losing vital sequential information. LSTM preserves and processes this sequential context across the entire window length.
+The dataset employs **30-cycle sliding windows** for time series processing. As documented in the preprocessing methodology (README.md, line 353): "We choose windows of length 30 because the window length should be less than the length of the shortest record, and the shortest record in the dataset is 31."
+
+This creates sequences where **temporal order is crucial**. The final training dataset contains "17,731 windows of 30 with 18 features" (README.md, line 372), where each window represents a temporal sequence. Traditional machine learning approaches would treat each timestep independently, losing vital sequential information. LSTM preserves and processes this sequential context across the entire 30-cycle window length.
 
 ### Sensor Interdependency Patterns
 
@@ -124,7 +130,7 @@ Unlike ensemble methods, LSTM's step-by-step processing allows:
 
 **Why LSTM is Superior for RUL Prediction:**
 
-- **Long-term Memory**: Engine degradation spans 100+ cycles. LSTM's separate forget gate provides better retention of distant historical patterns
+- **Long-term Memory**: Engine degradation spans substantial lifecycles (up to ~290 cycles in the dataset). LSTM's separate forget gate provides better retention of distant historical patterns across these extended operational periods
 - **Multivariate Complexity**: With 18 sensors, LSTM's distinct input/output gates handle complex feature interactions more effectively
 - **Subtle Pattern Detection**: LSTM's cell state preserves gradual degradation signals that GRU's simpler architecture might lose
 
@@ -152,7 +158,7 @@ Unlike ensemble methods, LSTM's step-by-step processing allows:
 
 **Why LSTM is Superior for RUL Prediction:**
 
-- **Data Efficiency**: Transformers require massive datasets for optimal performance. With 17,731 training samples, LSTM's inductive biases are more suitable
+- **Data Efficiency**: Transformers require massive datasets for optimal performance. With 17,731 training windows (README.md, line 372), LSTM's inductive biases are more suitable for this dataset scale
 - **Computational Efficiency**: LSTM provides better inference efficiency for production deployment
 - **Sequential Causality**: Engine degradation follows strict temporal causality that LSTM's recurrent structure naturally captures
 
