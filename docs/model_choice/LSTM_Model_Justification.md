@@ -92,31 +92,42 @@ For real-time aircraft monitoring systems, LSTM provides:
 - Deterministic processing suitable for safety systems
 - Scalable architecture for fleet-wide deployment
 
-## Explainability and Interpretability
+## Explainability and Interpretability Considerations
 
-### Temporal Feature Analysis
+### LSTM Inherent Limitations
 
-LSTM enables examination of:
+LSTM is fundamentally a **black-box model** with limited inherent explainability:
+- Hidden states and gate computations are opaque
+- Complex mathematical transformations obscure decision logic
+- No direct feature importance attribution
+- Temporal reasoning is embedded in learned weight matrices
 
-- Which historical time steps contribute most to predictions
-- How sensor importance evolves over operational cycles
-- Gradient flow analysis for understanding degradation triggers
+### Explainability Enhancement Strategies
 
-### Attention Mechanism Integration
+To address these limitations, LSTM can be augmented with post-hoc explainability tools:
 
-LSTM can be enhanced with attention layers to provide:
+**SHAP (SHapley Additive exPlanations):**
+- Provides feature importance for each prediction
+- Can decompose contributions across time steps
+- Offers both local (per-sample) and global explanations
 
-- Timestep-level importance visualization
-- Sensor-specific contribution analysis
-- Actionable insights for maintenance teams
+**LIME (Local Interpretable Model-agnostic Explanations):**
+- Creates locally interpretable explanations
+- Can perturb input sequences to understand sensitivities
+- Provides approximations of model behavior
 
-### Sequential Decision Transparency
+**Attention Mechanisms:**
+- Can be added to LSTM architecture for some transparency
+- Visualizes which time steps receive highest attention
+- Helps identify critical periods in degradation progression
 
-Unlike ensemble methods, LSTM's step-by-step processing allows:
+### Practical Explainability Trade-offs
 
-- Tracing prediction logic through time
-- Understanding how past events influence current predictions
-- Supporting root cause analysis for maintenance decisions
+For aerospace applications, this represents a **fundamental trade-off in temporal modeling**:
+- **All viable time-series models** (LSTM, GRU, Transformers, TCN) suffer from black-box limitations
+- **Sequential nature required**: Simple interpretable models cannot capture temporal dependencies critical for RUL prediction
+- **Industry standard approach**: Modern ML engineering combines black-box temporal models with post-hoc explainability tools
+- **LSTM advantage**: Among black-box options, LSTM + SHAP provides reasonable explainability while maintaining performance
 
 ## Comparative Analysis with Alternative Models
 
