@@ -10,11 +10,12 @@ Explaining the files in this folder
 
 - [jupyter notebook](./nasa/CMAPSS-remaining%20life.ipynb)
 - [README](nasa/README.md)
-- [Meeting notes about model choice and dataset](nasa/Meeting-justin-tiancheng-kimsia.md)
+
 
 ### model choice for the NASA turbofan degradation RUL model
 
 - [justification for LSTM](model_choice/LSTM_Model_Justification.md)
+- [Meeting notes about model choice and dataset](nasa/Meeting-justin-tiancheng-kimsia.md)
 
 ## PDF for predictive maintenance (considered but not chosen)
 
