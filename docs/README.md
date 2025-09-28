@@ -4,11 +4,11 @@ Explaining the files in this folder
 
 ## Project Brief
 
-- [Brief from Uly](Group Project Brief.md)
+- [Brief from Uly](./Group%20Project%20Brief.pdf)
 
 ## the NASA original research
 
-- [jupyter notebook](nasa/CMAPSS-remaining life.ipynb)
+- [jupyter notebook](./nasa/CMAPSS-remaining%20life.ipynb)
 - [README](nasa/README.md)
 
 ## model choice for the NASA turbofan degradation RUL model
