@@ -1,0 +1,64 @@
+# Ignore large data files
+Data/
+*.h5
+*.hdf5
+
+# Ignore large preprocessed data files
+data/df_combined.pkl
+data/df_train*.pkl
+data/df_val*.pkl
+data/df_test*.pkl
+data/df_oot*.pkl
+
+# Keep model files (these will be pushed)
+!models/
+!models/*.pkl
+!models/*.ckpt
+
+# Ignore Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Ignore IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Ignore large log files
+darts_logs/
+*.log
+
+# Ignore temporary files
+*.tmp
+*.temp
+~*
+
+# Ignore compressed files (unless needed)
+*.zip
+*.rar
+*.tar.gz
+
+# Keep documentation
+!docs/
+!README.md
+!*.md
+
+# Keep notebook files
+!*.ipynb
+
+# Keep plots (if you want to share visualizations)
+!plots/
+!plots/*.png
+!plots/*.jpg
