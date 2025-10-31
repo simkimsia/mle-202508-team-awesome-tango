@@ -63,3 +63,6 @@ darts_logs/
 !plots/*.png
 !plots/*.jpg
 
+
+scripts/datamart
+scripts/data

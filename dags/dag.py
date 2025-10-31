@@ -18,7 +18,7 @@ with DAG(
     description="data pipeline run daily",
     schedule_interval="0 0 * * *",  # At 00:00 on everyday
     start_date=datetime(2023, 1, 1),
-    end_date=datetime(2023, 1, 2),
+    end_date=datetime(2023, 1, 1),
     catchup=True,
 ) as dag:
     # --- 0. Start / End Markers ---
@@ -35,5 +35,15 @@ with DAG(
         ),
     )
 
+    silver_data_processing = BashOperator(
+        task_id="run_silver_data_processing",
+        bash_command=(
+            'cd /opt/airflow/scripts && '
+            'python3 silver_table_1.py '
+            '--snapshotdate "{{ ds }}"'
+        ),
+    )
+
+
     # --- Task Dependencies ---
-    start_pipeline >> bronze_data_processing >> end_pipeline
+    start_pipeline >> bronze_data_processing >> silver_data_processing >> end_pipeline
