@@ -3,66 +3,78 @@ from datetime import datetime
 import h5py
 import numpy as np
 import pandas as pd
-
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 
 def process_bronze_table(snapshot_date_str, bronze_lms_directory):
-    # prepare arguments
     snapshot_date = datetime.strptime(snapshot_date_str, "%Y-%m-%d")
+    table_name = "n_cmapss"
+    filename = f"data/N-CMAPSS_DS_{snapshot_date_str}.h5"
 
-    all_W, all_X_s, all_X_v, all_Y, all_A = [], [], [], [], []
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"File not found: {filename}")
 
-    print(f"Processing bronze table for snapshot date: {snapshot_date_str}")
-
-    d = snapshot_date_str[-1] 
-
-    print(d)
-
-    filename = f"Data/N-CMAPSS_DS0{d}.h5"
-
-    table_name = "N_CMAPSS".lower()
-
+    print(f"Processing Bronze table for snapshot date: {snapshot_date_str}")
     print(f"Loading data from {filename}")
 
-    with h5py.File(filename, 'r') as hdf:
-        W_dev = np.array(hdf.get('W_dev'))
-        X_s_dev = np.array(hdf.get('X_s_dev'))
-        X_v_dev = np.array(hdf.get('X_v_dev'))
-        Y_dev = np.array(hdf.get('Y_dev'))
-        A_dev = np.array(hdf.get('A_dev'))
-
-        W_test = np.array(hdf.get('W_test'))
-        X_s_test = np.array(hdf.get('X_s_test'))
-        X_v_test = np.array(hdf.get('X_v_test'))
-        Y_test = np.array(hdf.get('Y_test'))
-        A_test = np.array(hdf.get('A_test'))
-
-        # Combine dev and test for this dataset
-        W = np.concatenate((W_dev, W_test), axis=0)
-        X_s = np.concatenate((X_s_dev, X_s_test), axis=0)
-        X_v = np.concatenate((X_v_dev, X_v_test), axis=0)
-        Y = np.concatenate((Y_dev, Y_test), axis=0)
-        A = np.concatenate((A_dev, A_test), axis=0)
-
-
-    # Combine into a simple dict DataFrame for quick storage
-    df = pd.DataFrame({
-        "W": list(W),
-        "X_s": list(X_s),
-        "X_v": list(X_v),
-        "Y": list(Y),
-        "A": list(A)
-    })
-
-    df["snapshot_date"] = snapshot_date
-
-    print(f"{table_name}_{snapshot_date_str} row count: {len(df)}")
-
-    dataset_dir = os.path.join(bronze_lms_directory, table_name, f"snapshot_date={snapshot_date_str}")
-    os.makedirs(dataset_dir, exist_ok=True)
+    dataset_dir = os.path.join(
+        bronze_lms_directory, table_name, f"snapshot_date={snapshot_date_str}"
+    )
     
-    filepath = os.path.join(dataset_dir, "data.parquet")
-    df.to_parquet(filepath, index=False)
-    print('saved to:', filepath)
-        
-    return df
+    # --- Overwrite logic: clear old parquet files if directory exists ---
+    if os.path.exists(dataset_dir):
+        print(f"Overwriting existing Bronze snapshot: {dataset_dir}")
+        # Remove all old parquet files in the folder
+        for f in os.listdir(dataset_dir):
+            file_path = os.path.join(dataset_dir, f)
+            if os.path.isfile(file_path) and f.endswith(".parquet"):
+                os.remove(file_path)
+        # (optional) remove leftover marker files like _SUCCESS
+        for f in os.listdir(dataset_dir):
+            if f.startswith("_"):
+                os.remove(os.path.join(dataset_dir, f))
+    else:
+        os.makedirs(dataset_dir)
+
+    chunk_size = 500000  # smaller chunks = less RAM
+
+    with h5py.File(filename, "r") as hdf:
+        total_rows = hdf["W_dev"].shape[0]
+        print(f"Total rows: {total_rows}")
+
+        for i, start in enumerate(range(0, total_rows, chunk_size)):
+            end = min(start + chunk_size, total_rows)
+            print(f"Processing chunk {i+1}: rows {start}:{end}")
+
+            # Load only a slice of the arrays
+            W = np.concatenate((hdf["W_dev"][start:end], hdf["W_test"][start:end]), axis=0)
+            X_s = np.concatenate((hdf["X_s_dev"][start:end], hdf["X_s_test"][start:end]), axis=0)
+            X_v = np.concatenate((hdf["X_v_dev"][start:end], hdf["X_v_test"][start:end]), axis=0)
+            Y = np.concatenate((hdf["Y_dev"][start:end], hdf["Y_test"][start:end]), axis=0)
+            A = np.concatenate((hdf["A_dev"][start:end], hdf["A_test"][start:end]), axis=0)
+            T = np.concatenate((hdf["T_dev"][start:end], hdf["T_test"][start:end]), axis=0)
+
+
+            df_chunk = pd.DataFrame({
+                "W": list(W),
+                "X_s": list(X_s),
+                "X_v": list(X_v),
+                "T": list(T),
+                "Y": list(Y),
+                "A": list(A)
+            })
+            df_chunk["snapshot_date"] = snapshot_date
+
+            # Save this chunk as its own parquet file
+            filepath = os.path.join(dataset_dir, f"data_part_{i+1:04d}.parquet")
+            table = pa.Table.from_pandas(df_chunk, preserve_index=False)
+            pq.write_table(table, filepath)
+
+            print(f"  ➤ Saved {filepath} ({len(df_chunk)} rows)")
+
+            # Free memory
+            del df_chunk, table, W, X_s, X_v, T, Y, A
+
+    print(f"Completed Bronze partitioned write to: {dataset_dir}")
+    return dataset_dir
