@@ -16,11 +16,12 @@ from darts import TimeSeries
 
 
 # Selected features for LSTM model (12 features)
+# Must match notebook features for model inference compatibility
 SELECTED_FEATURES = [
-    'P40',      # HPC Outlet Pressure
+    'P30',      # HPC Outlet Pressure
     'W31',      # LPT Coolant Bleed
     'P15',      # Fan Inlet Pressure
-    'Nf',       # Demanded Fan Speed (Fan Speed)
+    'W50',      # Demanded Fan Speed
     'Nf',       # Fan Speed
     'Nc',       # Core Speed
     'Ps30',     # Pressure in Bypass Duct

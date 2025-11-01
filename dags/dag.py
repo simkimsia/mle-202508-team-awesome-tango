@@ -17,7 +17,7 @@ with DAG(
     description="data pipeline run daily",
     schedule_interval="0 0 * * *",  # At 00:00 on everyday
     start_date=datetime(2025, 1, 1),
-    end_date=datetime(2025, 1, 2),
+    end_date=datetime(2025, 1, 1),
     catchup=True,
 ) as dag:
     # --- 0. Start / End Markers ---
