@@ -11,7 +11,6 @@ import os
 import glob
 import pickle
 import pandas as pd
-import pyarrow.parquet as pq
 from darts import TimeSeries
 
 
@@ -56,71 +55,75 @@ def process_gold_label_lstm(
         f"snapshot_date={snapshot_date_str}"
     )
 
-    # Load base label DataFrame
-    # Supports both partitioned (dataset=X/data.parquet) and single file (data.parquet)
-    # Handle schema conflicts between partitions (e.g., int32 vs dictionary-encoded)
-    try:
-        df = pd.read_parquet(input_dir, engine='pyarrow')
-    except Exception as e:
-        # If schema conflict, read partitions individually and concatenate
-        print(f"Schema conflict detected, reading partitions individually...")
+    # Process partitions incrementally to avoid OOM
+    # Find all parquet files (either partitioned or single file)
+    parquet_files = glob.glob(os.path.join(input_dir, '**/data.parquet'), recursive=True)
 
-        # Find all parquet files in the directory
-        parquet_files = glob.glob(os.path.join(input_dir, '**/data.parquet'), recursive=True)
+    if not parquet_files:
+        # Try single file
+        parquet_files = glob.glob(os.path.join(input_dir, '*.parquet'))
 
-        if not parquet_files:
-            # Try single file
-            parquet_files = glob.glob(os.path.join(input_dir, '*.parquet'))
+    if not parquet_files:
+        raise FileNotFoundError(f"No parquet files found in {input_dir}")
 
-        print(f"Found {len(parquet_files)} partition files")
+    print(f"Found {len(parquet_files)} partition files")
 
-        # Read each partition and ensure consistent types
-        dfs = []
-        for parquet_file in parquet_files:
-            df_part = pd.read_parquet(parquet_file, engine='pyarrow')
-
-            # Convert categorical/dictionary columns to their base types
-            for col in df_part.columns:
-                if pd.api.types.is_categorical_dtype(df_part[col]):
-                    df_part[col] = df_part[col].astype(df_part[col].cat.categories.dtype)
-
-            dfs.append(df_part)
-
-        # Concatenate all partitions
-        df = pd.concat(dfs, ignore_index=True)
-        print(f"Concatenated {len(dfs)} partitions")
-
-    print(f"Loaded {len(df):,} rows from base labels")
-
-    # Create unique unit identifier matching notebook format: DS{dataset:02d}_{unit_orig:03d}
-    # This prevents conflicts where same unit_orig exists in different datasets
-    # Example: dataset=1, unit_orig=1 → 'DS01_001'
-    df['unit'] = df.apply(lambda row: f"DS{int(row['dataset']):02d}_{int(row['unit_orig']):03d}", axis=1)
-
-    # Convert to TimeSeries objects
-    # Group by unique unit identifier and create one TimeSeries per engine
+    # Process each partition separately to keep memory usage low
     targets = []
     units = []
+    total_rows = 0
 
-    for unit in sorted(df['unit'].unique()):
-        df_unit = df[df['unit'] == unit].sort_values('time')
+    for i, parquet_file in enumerate(sorted(parquet_files), 1):
+        print(f"Processing partition {i}/{len(parquet_files)}: {os.path.basename(os.path.dirname(parquet_file))}")
 
-        # Remove duplicate time values (keep first occurrence)
-        df_unit = df_unit.drop_duplicates(subset=['time'], keep='first')
+        # Load partition
+        df_part = pd.read_parquet(parquet_file, engine='pyarrow')
 
-        # Create TimeSeries with time index and RUL_Clipped values
-        # Use freq=1 to specify uniform time steps
-        ts = TimeSeries.from_dataframe(
-            df_unit,
-            time_col='time',
-            value_cols=['RUL_Clipped'],
-            fill_missing_dates=True,
-            freq=1
+        # Convert categorical/dictionary columns to their base types
+        for col in df_part.columns:
+            if pd.api.types.is_categorical_dtype(df_part[col]):
+                df_part[col] = df_part[col].astype(df_part[col].cat.categories.dtype)
+
+        total_rows += len(df_part)
+
+        # Create unique unit identifier matching notebook format: DS{dataset:02d}_{unit_orig:03d}
+        # This prevents conflicts where same unit_orig exists in different datasets
+        # Example: dataset=1, unit_orig=1 → 'DS01_001'
+        # Use vectorized string formatting for better performance
+        df_part['unit'] = (
+            'DS' +
+            df_part['dataset'].astype(int).astype(str).str.zfill(2) +
+            '_' +
+            df_part['unit_orig'].astype(int).astype(str).str.zfill(3)
         )
 
-        targets.append(ts)
-        units.append(unit)
+        # Convert to TimeSeries objects for this partition
+        # Group by unique unit identifier and create one TimeSeries per engine
+        for unit in sorted(df_part['unit'].unique()):
+            df_unit = df_part[df_part['unit'] == unit].sort_values('time')
 
+            # Remove duplicate time values (keep first occurrence)
+            df_unit = df_unit.drop_duplicates(subset=['time'], keep='first')
+
+            # Create TimeSeries with time index and RUL_Clipped values
+            # Use freq=1 to specify uniform time steps
+            ts = TimeSeries.from_dataframe(
+                df_unit,
+                time_col='time',
+                value_cols=['RUL_Clipped'],
+                fill_missing_dates=True,
+                freq=1
+            )
+
+            targets.append(ts)
+            units.append(unit)
+
+        print(f"  Partition {i}: Created {len(df_part['unit'].unique())} TimeSeries objects from {len(df_part):,} rows")
+
+        # Free memory
+        del df_part
+
+    print(f"Processed {total_rows:,} total rows from {len(parquet_files)} partitions")
     print(f"Created {len(targets)} TimeSeries objects (one per engine unit)")
 
     # Create output directory

@@ -11,25 +11,24 @@ import os
 import glob
 import pickle
 import pandas as pd
-import pyarrow.parquet as pq
 from darts import TimeSeries
 
 
 # Selected features for LSTM model (12 features)
 # Must match notebook features for model inference compatibility
 SELECTED_FEATURES = [
-    'P30',      # HPC Outlet Pressure
-    'W31',      # LPT Coolant Bleed
-    'P15',      # Fan Inlet Pressure
-    'W50',      # Demanded Fan Speed
-    'Nf',       # Fan Speed
-    'Nc',       # Core Speed
-    'Ps30',     # Pressure in Bypass Duct
-    'phi',      # Fuel Flow Ratio
-    'T50',      # LPT Outlet Temperature
-    'Altitude', # Altitude
-    'Mach_Number',  # Mach Number
-    'TRA'       # Throttle Resolver Angle
+    'HPC Outlet Pressure',
+    'LPT Coolant Bleed',
+    'Fan Inlet Pressure',
+    'Demanded Fan Speed',
+    'Fan Speed',
+    'Core Speed',
+    'Pressure in Bypass Duct',
+    'Fuel Flow Ratio',
+    'LPT Outlet Temperature',
+    'Altitude',
+    'Mach Number',
+    'Throttle Resolver Angle'
 ]
 
 
@@ -80,9 +79,9 @@ def process_gold_feature_lstm(
     # Handle schema conflicts between partitions (e.g., int32 vs dictionary-encoded)
     try:
         df = pd.read_parquet(input_dir, engine='pyarrow')
-    except Exception as e:
+    except Exception:
         # If schema conflict, read partitions individually and concatenate
-        print(f"Schema conflict detected, reading partitions individually...")
+        print("Schema conflict detected, reading partitions individually...")
 
         # Find all parquet files in the directory
         parquet_files = glob.glob(os.path.join(input_dir, '**/data.parquet'), recursive=True)
