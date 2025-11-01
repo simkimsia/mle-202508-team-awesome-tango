@@ -3,34 +3,33 @@ Gold Feature LSTM Processing
 Creates LSTM-compatible time series features.
 
 This module transforms raw sensor data into normalized TimeSeries objects
-suitable for LSTM model training with sequence modeling.
+suitable for LSTM model training with sequence modeling. Each snapshot date
+is processed independently, with temporal splitting handled at the DAG level.
 """
 
 import os
+import glob
 import pickle
-from datetime import datetime
 import pandas as pd
-# from darts import TimeSeries
-# from darts.dataprocessing.transformers import Scaler
+import pyarrow.parquet as pq
+from darts import TimeSeries
 
 
-# Configuration
+# Selected features for LSTM model (12 features)
 SELECTED_FEATURES = [
-    'HPC Outlet Pressure',
-    'LPT Coolant Bleed',
-    'Fan Inlet Pressure',
-    'Demanded Fan Speed',
-    'Fan Speed',
-    'Core Speed',
-    'Pressure in Bypass Duct',
-    'Fuel Flow Ratio',
-    'LPT Outlet Temperature',
-    'Altitude',
-    'Mach Number',
-    'Throttle Resolver Angle'
+    'P40',      # HPC Outlet Pressure
+    'W31',      # LPT Coolant Bleed
+    'P15',      # Fan Inlet Pressure
+    'Nf',       # Demanded Fan Speed (Fan Speed)
+    'Nf',       # Fan Speed
+    'Nc',       # Core Speed
+    'Ps30',     # Pressure in Bypass Duct
+    'phi',      # Fuel Flow Ratio
+    'T50',      # LPT Outlet Temperature
+    'Altitude', # Altitude
+    'Mach_Number',  # Mach Number
+    'TRA'       # Throttle Resolver Angle
 ]
-
-SEQUENCE_LENGTH = 30  # Lookback window
 
 
 def process_gold_feature_lstm(
@@ -50,84 +49,124 @@ def process_gold_feature_lstm(
         str: Path to the output directory
 
     Processing Steps:
-        1. Load train/val/test/oot DataFrames
-        2. Select 12 features from SELECTED_FEATURES
-        3. For each split:
-           - Group by engine unit
-           - Create Darts TimeSeries objects (one per engine)
-           - Each TimeSeries contains 12 feature values indexed by time
-        4. Normalize features using Scaler:
-           - Fit scaler on training features
-           - Transform val/test/oot features
-        5. Save TimeSeries objects and scaler
+        1. Load data.parquet for this snapshot date
+        2. Select features from SELECTED_FEATURES
+        3. Group by engine unit
+        4. Create Darts TimeSeries objects (one per engine)
+           - Each TimeSeries contains feature values indexed by time
+        5. Save TimeSeries objects and unit list
 
     Output:
-        - train/covariates.pkl (list of 39 TimeSeries, shape: (time_steps, 12))
-        - val/covariates.pkl (list of 7 TimeSeries)
-        - test/covariates.pkl (list of 9 TimeSeries)
-        - oot/covariates.pkl (list of 19 TimeSeries)
-        - feature_scaler.pkl (fitted Scaler)
-        - train/units.pkl, val/units.pkl, test/units.pkl, oot/units.pkl
+        - covariates.pkl (list of TimeSeries, shape: (time_steps, 12))
+        - units.pkl (list of unit identifiers)
+
+    Note:
+        Normalization is handled at model training time across all training
+        snapshot dates. Temporal splitting (train/val/test/oot) is done at
+        the DAG level by selecting different snapshot dates.
     """
     print(f"Processing Gold Feature LSTM for snapshot date: {snapshot_date_str}")
     print(f"Loading base labels from {gold_label_base_dir}")
 
-    # Create output directories
-    base_output_dir = os.path.join(
-        gold_feature_lstm_dir,
-        "n_cmapss",
-        f"snapshot_date={snapshot_date_str}"
-    )
-
-    for split in ['train', 'val', 'test', 'oot']:
-        os.makedirs(os.path.join(base_output_dir, split), exist_ok=True)
-
     # Input directory
     input_dir = os.path.join(
         gold_label_base_dir,
-        "n_cmapss",
         f"snapshot_date={snapshot_date_str}"
     )
 
-    # TODO: Load base DataFrames
-    # df_train = pd.read_parquet(os.path.join(input_dir, 'df_train.parquet'))
-    # df_val = pd.read_parquet(os.path.join(input_dir, 'df_val.parquet'))
-    # df_test = pd.read_parquet(os.path.join(input_dir, 'df_test.parquet'))
-    # df_oot = pd.read_parquet(os.path.join(input_dir, 'df_oot.parquet'))
+    # Load base DataFrame
+    # Supports both partitioned (dataset=X/data.parquet) and single file (data.parquet)
+    # Handle schema conflicts between partitions (e.g., int32 vs dictionary-encoded)
+    try:
+        df = pd.read_parquet(input_dir, engine='pyarrow')
+    except Exception as e:
+        # If schema conflict, read partitions individually and concatenate
+        print(f"Schema conflict detected, reading partitions individually...")
 
-    # TODO: Select features
-    # feature_cols = SELECTED_FEATURES
+        # Find all parquet files in the directory
+        parquet_files = glob.glob(os.path.join(input_dir, '**/data.parquet'), recursive=True)
 
-    # TODO: Convert to TimeSeries objects
-    # For each split, group by unit and create TimeSeries with selected features
-    # train_covariates = []
-    # train_units = []
-    # for unit in df_train['unit'].unique():
-    #     df_unit = df_train[df_train['unit'] == unit].sort_values('time')
-    #     ts = TimeSeries.from_dataframe(
-    #         df_unit,
-    #         time_col='time',
-    #         value_cols=feature_cols
-    #     )
-    #     train_covariates.append(ts)
-    #     train_units.append(unit)
+        if not parquet_files:
+            # Try single file
+            parquet_files = glob.glob(os.path.join(input_dir, '*.parquet'))
 
-    # TODO: Normalize using Scaler
-    # scaler = Scaler()
-    # train_covariates_normalized = scaler.fit_transform(train_covariates)
-    # val_covariates_normalized = scaler.transform(val_covariates)
-    # test_covariates_normalized = scaler.transform(test_covariates)
-    # oot_covariates_normalized = scaler.transform(oot_covariates)
+        print(f"Found {len(parquet_files)} partition files")
 
-    # TODO: Save TimeSeries objects
-    # with open(os.path.join(base_output_dir, 'train', 'covariates.pkl'), 'wb') as f:
-    #     pickle.dump(train_covariates_normalized, f)
-    # with open(os.path.join(base_output_dir, 'train', 'units.pkl'), 'wb') as f:
-    #     pickle.dump(train_units, f)
+        # Read each partition and ensure consistent types
+        dfs = []
+        for parquet_file in parquet_files:
+            df_part = pd.read_parquet(parquet_file, engine='pyarrow')
 
-    # TODO: Save scaler
-    # with open(os.path.join(base_output_dir, 'feature_scaler.pkl'), 'wb') as f:
-    #     pickle.dump(scaler, f)
+            # Convert categorical/dictionary columns to their base types
+            for col in df_part.columns:
+                if pd.api.types.is_categorical_dtype(df_part[col]):
+                    df_part[col] = df_part[col].astype(df_part[col].cat.categories.dtype)
 
-    print(f"Gold Feature LSTM written successfully to {base_output_dir}")
-    return base_output_dir
+            dfs.append(df_part)
+
+        # Concatenate all partitions
+        df = pd.concat(dfs, ignore_index=True)
+        print(f"Concatenated {len(dfs)} partitions")
+
+    print(f"Loaded {len(df):,} rows from base labels")
+
+    # Verify selected features exist in DataFrame
+    missing_features = [f for f in SELECTED_FEATURES if f not in df.columns]
+    if missing_features:
+        print(f"WARNING: Missing features: {missing_features}")
+        feature_cols = [f for f in SELECTED_FEATURES if f in df.columns]
+    else:
+        feature_cols = SELECTED_FEATURES
+
+    print(f"Using {len(feature_cols)} features: {feature_cols}")
+
+    # Create unique unit identifier matching notebook format: DS{dataset:02d}_{unit_orig:03d}
+    # This prevents conflicts where same unit_orig exists in different datasets
+    # Example: dataset=1, unit_orig=1 → 'DS01_001'
+    df['unit'] = df.apply(lambda row: f"DS{int(row['dataset']):02d}_{int(row['unit_orig']):03d}", axis=1)
+
+    # Convert to TimeSeries objects
+    # Group by unique unit identifier and create one TimeSeries per engine
+    covariates = []
+    units = []
+
+    for unit in sorted(df['unit'].unique()):
+        df_unit = df[df['unit'] == unit].sort_values('time')
+
+        # Remove duplicate time values (keep first occurrence)
+        df_unit = df_unit.drop_duplicates(subset=['time'], keep='first')
+
+        # Create TimeSeries with time index and feature values
+        # Use freq=1 to specify uniform time steps
+        ts = TimeSeries.from_dataframe(
+            df_unit,
+            time_col='time',
+            value_cols=feature_cols,
+            fill_missing_dates=True,
+            freq=1
+        )
+
+        covariates.append(ts)
+        units.append(unit)
+
+    print(f"Created {len(covariates)} TimeSeries objects (one per engine unit)")
+
+    # Create output directory
+    output_dir = os.path.join(
+        gold_feature_lstm_dir,
+        f"snapshot_date={snapshot_date_str}"
+    )
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Save TimeSeries objects
+    with open(os.path.join(output_dir, 'covariates.pkl'), 'wb') as f:
+        pickle.dump(covariates, f)
+    print(f"Saved covariates to {os.path.join(output_dir, 'covariates.pkl')}")
+
+    # Save unit list
+    with open(os.path.join(output_dir, 'units.pkl'), 'wb') as f:
+        pickle.dump(units, f)
+    print(f"Saved {len(units)} unit IDs to {os.path.join(output_dir, 'units.pkl')}")
+
+    print(f"Gold Feature LSTM written successfully to {output_dir}")
+    return output_dir

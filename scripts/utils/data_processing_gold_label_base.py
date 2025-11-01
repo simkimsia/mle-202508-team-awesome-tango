@@ -94,14 +94,28 @@ def process_gold_label_base(
             os.makedirs(dataset_output_dir, exist_ok=True)
 
             output_path = os.path.join(dataset_output_dir, 'data.parquet')
-            df_dataset.to_parquet(output_path, index=False)
+            # Write with consistent schema to avoid PyArrow type conflicts
+            # Disable dictionary encoding to prevent schema conflicts
+            df_dataset.to_parquet(
+                output_path,
+                index=False,
+                engine='pyarrow',
+                compression='snappy',
+                use_dictionary=False
+            )
             print(f"  Saved dataset {dataset_id}: {len(df_dataset):,} rows to {output_path}")
 
         print(f"Saved {len(df):,} total rows across {len(datasets)} partitions")
     else:
         # Save as single file
         output_path = os.path.join(output_dir, 'data.parquet')
-        df.to_parquet(output_path, index=False)
+        df.to_parquet(
+            output_path,
+            index=False,
+            engine='pyarrow',
+            compression='snappy',
+            use_dictionary=False
+        )
         print(f"Saved {len(df):,} rows to {output_path}")
 
     print(f"Gold Label Base written successfully to {output_dir}")

@@ -70,9 +70,13 @@ def process_silver_table(spark: SparkSession, bronze_dir: str, silver_dir: str, 
             "snapshot_date"
         )
 
+    # Write parquet with consistent schema
+    # Disable dictionary encoding to prevent schema conflicts downstream
     df_expanded.write\
         .mode("overwrite")\
         .option("partitionOverwriteMode", "dynamic")\
+        .option("parquet.enable.dictionary", "false")\
+        .option("compression", "snappy")\
         .partitionBy("snapshot_date")\
         .parquet(silver_dir)
     print(f"Silver table written successfully to {silver_dir}")

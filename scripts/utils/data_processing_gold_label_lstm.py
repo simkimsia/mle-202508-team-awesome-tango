@@ -3,15 +3,16 @@ Gold Label LSTM Processing
 Converts base labels to LSTM-compatible TimeSeries format.
 
 This module transforms DataFrame labels into Darts TimeSeries objects
-suitable for LSTM model training and inference.
+suitable for LSTM model training and inference. Each snapshot date is processed
+independently, with temporal splitting handled at the DAG level.
 """
 
 import os
+import glob
 import pickle
-from datetime import datetime
 import pandas as pd
-# from darts import TimeSeries
-# from darts.dataprocessing.transformers import Scaler
+import pyarrow.parquet as pq
+from darts import TimeSeries
 
 
 def process_gold_label_lstm(
@@ -31,80 +32,113 @@ def process_gold_label_lstm(
         str: Path to the output directory
 
     Processing Steps:
-        1. Load train/val/test/oot parquet files
-        2. For each split:
-           - Group by engine unit
-           - Create Darts TimeSeries objects (one per engine)
+        1. Load data.parquet for this snapshot date
+        2. Group by engine unit
+        3. Create Darts TimeSeries objects (one per engine)
            - Each TimeSeries contains RUL_Clipped values indexed by time
-        3. Normalize labels using Scaler:
-           - Fit scaler on training labels
-           - Transform val/test/oot labels
-        4. Save TimeSeries objects and scaler
+        4. Save TimeSeries objects and unit list
 
     Output:
-        - train/targets.pkl (list of 39 TimeSeries)
-        - val/targets.pkl (list of 7 TimeSeries)
-        - test/targets.pkl (list of 9 TimeSeries)
-        - oot/targets.pkl (list of 19 TimeSeries)
-        - target_scaler.pkl (fitted Scaler)
-        - train/units.pkl, val/units.pkl, test/units.pkl, oot/units.pkl
+        - targets.pkl (list of TimeSeries, one per engine unit)
+        - units.pkl (list of unit identifiers)
+
+    Note:
+        Normalization is handled at model training time across all training
+        snapshot dates. Temporal splitting (train/val/test/oot) is done at
+        the DAG level by selecting different snapshot dates.
     """
     print(f"Processing Gold Label LSTM for snapshot date: {snapshot_date_str}")
     print(f"Loading base labels from {gold_label_base_dir}")
 
-    # Create output directories
-    base_output_dir = os.path.join(
-        gold_label_lstm_dir,
-        "n_cmapss",
-        f"snapshot_date={snapshot_date_str}"
-    )
-
-    for split in ['train', 'val', 'test', 'oot']:
-        os.makedirs(os.path.join(base_output_dir, split), exist_ok=True)
-
     # Input directory
     input_dir = os.path.join(
         gold_label_base_dir,
-        "n_cmapss",
         f"snapshot_date={snapshot_date_str}"
     )
 
-    # TODO: Load base label DataFrames
-    # df_train = pd.read_parquet(os.path.join(input_dir, 'df_train.parquet'))
-    # df_val = pd.read_parquet(os.path.join(input_dir, 'df_val.parquet'))
-    # df_test = pd.read_parquet(os.path.join(input_dir, 'df_test.parquet'))
-    # df_oot = pd.read_parquet(os.path.join(input_dir, 'df_oot.parquet'))
+    # Load base label DataFrame
+    # Supports both partitioned (dataset=X/data.parquet) and single file (data.parquet)
+    # Handle schema conflicts between partitions (e.g., int32 vs dictionary-encoded)
+    try:
+        df = pd.read_parquet(input_dir, engine='pyarrow')
+    except Exception as e:
+        # If schema conflict, read partitions individually and concatenate
+        print(f"Schema conflict detected, reading partitions individually...")
 
-    # TODO: Convert to TimeSeries objects
-    # For each split, group by unit and create TimeSeries
-    # train_targets = []
-    # train_units = []
-    # for unit in df_train['unit'].unique():
-    #     df_unit = df_train[df_train['unit'] == unit].sort_values('time')
-    #     ts = TimeSeries.from_dataframe(
-    #         df_unit,
-    #         time_col='time',
-    #         value_cols=['RUL_Clipped']
-    #     )
-    #     train_targets.append(ts)
-    #     train_units.append(unit)
+        # Find all parquet files in the directory
+        parquet_files = glob.glob(os.path.join(input_dir, '**/data.parquet'), recursive=True)
 
-    # TODO: Normalize using Scaler
-    # scaler = Scaler()
-    # train_targets_normalized = scaler.fit_transform(train_targets)
-    # val_targets_normalized = scaler.transform(val_targets)
-    # test_targets_normalized = scaler.transform(test_targets)
-    # oot_targets_normalized = scaler.transform(oot_targets)
+        if not parquet_files:
+            # Try single file
+            parquet_files = glob.glob(os.path.join(input_dir, '*.parquet'))
 
-    # TODO: Save TimeSeries objects
-    # with open(os.path.join(base_output_dir, 'train', 'targets.pkl'), 'wb') as f:
-    #     pickle.dump(train_targets_normalized, f)
-    # with open(os.path.join(base_output_dir, 'train', 'units.pkl'), 'wb') as f:
-    #     pickle.dump(train_units, f)
+        print(f"Found {len(parquet_files)} partition files")
 
-    # TODO: Save scaler
-    # with open(os.path.join(base_output_dir, 'target_scaler.pkl'), 'wb') as f:
-    #     pickle.dump(scaler, f)
+        # Read each partition and ensure consistent types
+        dfs = []
+        for parquet_file in parquet_files:
+            df_part = pd.read_parquet(parquet_file, engine='pyarrow')
 
-    print(f"Gold Label LSTM written successfully to {base_output_dir}")
-    return base_output_dir
+            # Convert categorical/dictionary columns to their base types
+            for col in df_part.columns:
+                if pd.api.types.is_categorical_dtype(df_part[col]):
+                    df_part[col] = df_part[col].astype(df_part[col].cat.categories.dtype)
+
+            dfs.append(df_part)
+
+        # Concatenate all partitions
+        df = pd.concat(dfs, ignore_index=True)
+        print(f"Concatenated {len(dfs)} partitions")
+
+    print(f"Loaded {len(df):,} rows from base labels")
+
+    # Create unique unit identifier matching notebook format: DS{dataset:02d}_{unit_orig:03d}
+    # This prevents conflicts where same unit_orig exists in different datasets
+    # Example: dataset=1, unit_orig=1 → 'DS01_001'
+    df['unit'] = df.apply(lambda row: f"DS{int(row['dataset']):02d}_{int(row['unit_orig']):03d}", axis=1)
+
+    # Convert to TimeSeries objects
+    # Group by unique unit identifier and create one TimeSeries per engine
+    targets = []
+    units = []
+
+    for unit in sorted(df['unit'].unique()):
+        df_unit = df[df['unit'] == unit].sort_values('time')
+
+        # Remove duplicate time values (keep first occurrence)
+        df_unit = df_unit.drop_duplicates(subset=['time'], keep='first')
+
+        # Create TimeSeries with time index and RUL_Clipped values
+        # Use freq=1 to specify uniform time steps
+        ts = TimeSeries.from_dataframe(
+            df_unit,
+            time_col='time',
+            value_cols=['RUL_Clipped'],
+            fill_missing_dates=True,
+            freq=1
+        )
+
+        targets.append(ts)
+        units.append(unit)
+
+    print(f"Created {len(targets)} TimeSeries objects (one per engine unit)")
+
+    # Create output directory
+    output_dir = os.path.join(
+        gold_label_lstm_dir,
+        f"snapshot_date={snapshot_date_str}"
+    )
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Save TimeSeries objects
+    with open(os.path.join(output_dir, 'targets.pkl'), 'wb') as f:
+        pickle.dump(targets, f)
+    print(f"Saved targets to {os.path.join(output_dir, 'targets.pkl')}")
+
+    # Save unit list
+    with open(os.path.join(output_dir, 'units.pkl'), 'wb') as f:
+        pickle.dump(units, f)
+    print(f"Saved {len(units)} unit IDs to {os.path.join(output_dir, 'units.pkl')}")
+
+    print(f"Gold Label LSTM written successfully to {output_dir}")
+    return output_dir
