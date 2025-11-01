@@ -72,7 +72,7 @@ def process_silver_table(spark: SparkSession, bronze_dir: str, silver_dir: str, 
 
     df_expanded.write\
         .mode("overwrite")\
-        .option("replaceWhere", f"snapshot_date={snapshot_date_str}")\
+        .option("partitionOverwriteMode", "dynamic")\
         .partitionBy("snapshot_date")\
         .parquet(silver_dir)
     print(f"Silver table written successfully to {silver_dir}")
