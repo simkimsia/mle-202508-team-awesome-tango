@@ -13,11 +13,48 @@ Supports batch processing for memory-constrained environments.
 import os
 import pandas as pd
 import numpy as np
-import glob
 
 
 # Configuration
 RUL_CLIP_MAX = 90
+
+# Column renaming mapping from short codes to full descriptive names
+# Must match the notebook's COLUMN_RENAME_MAP for consistency
+COLUMN_RENAME_MAP = {
+    'Mach_Number': 'Mach Number',
+    'TRA': 'Throttle Resolver Angle',
+    'T2': 'Total Temperature at Fan Inlet',
+    'T24': 'LPC Outlet Temperature',
+    'T30': 'HPC Inlet Temperature',
+    'T40': 'Total Temperature at Burner Outlet',
+    'T48': 'HPT Outlet Temperature',
+    'T50': 'LPT Outlet Temperature',
+    'P2': 'Fan Inlet Pressure',
+    'P15': 'Pressure in Bypass Duct',
+    'P21': 'Engine Pressure Ratio',
+    'P24': 'Corrected Fan Speed Ratio',
+    'P30': 'HPC Outlet Pressure',
+    'P40': 'Bypass Ratio',
+    'P45': 'Total Pressure at HPT Outlet',
+    'P50': 'Total Pressure at LPT Outlet',
+    'Ps30': 'HPC Outlet Static Pressure',
+    'Nf': 'Fan Speed',
+    'Nc': 'Core Speed',
+    'Wf': 'Fuel Flow',
+    'phi': 'Fuel Flow Ratio',
+    'W21': 'Fan Flow',
+    'W22': 'LPC Flow',
+    'W25': 'HPC Flow',
+    'W31': 'HPT Coolant Bleed',
+    'W32': 'LPT Coolant Bleed',
+    'W48': 'Bleed Enthalpy',
+    'W50': 'Demanded Fan Speed',
+    'SmFan': 'Fan Stall Margin',
+    'SmLPC': 'LPC Stall Margin',
+    'SmHPC': 'HPC Stall Margin',
+    'Fc': 'Flight Class',
+    'hs': 'Health Status'
+}
 
 
 def process_gold_label_base(
@@ -75,6 +112,12 @@ def process_gold_label_base(
     # Load silver DataFrame
     df = pd.read_parquet(silver_dir)
     print(f"Loaded {len(df):,} rows from silver layer")
+
+    # Rename columns from short codes to full descriptive names
+    # This ensures consistency with the notebook and downstream processing
+    columns_to_rename = {k: v for k, v in COLUMN_RENAME_MAP.items() if k in df.columns}
+    df = df.rename(columns=columns_to_rename)
+    print(f"Renamed {len(columns_to_rename)} columns to descriptive names")
 
     # Create RUL_Clipped column
     df['RUL_Clipped'] = np.clip(df['Remaining_Useful_Life'], 0, RUL_CLIP_MAX)
