@@ -145,6 +145,8 @@ def process_gold_feature_xgboost(
     """
     Create XGBoost-compatible tabular features with rolling windows.
 
+    MEMORY OPTIMIZED: Processes each dataset partition separately to avoid OOM.
+
     Args:
         gold_label_base_dir: Path to base label parquet files
         gold_feature_xgboost_dir: Output directory for XGBoost features
@@ -154,11 +156,10 @@ def process_gold_feature_xgboost(
         str: Path to the output directory
 
     Processing Steps:
-        1. Load data.parquet for this snapshot date (handles partitions)
-        2. Create a unique 'unit' identifier
-        3. Select features from SELECTED_FEATURES
-        4. Apply 'create_multiscale_features' to generate rolling stats
-        5. Save the final, flat DataFrame to 'features.parquet'
+        1. Detect if data is partitioned by dataset
+        2. Process each partition separately (lower memory usage)
+        3. Apply 'create_multiscale_features' to each partition
+        4. Save partitioned features.parquet files
     """
     print(f"Processing Gold Feature XGBoost for snapshot date: {snapshot_date_str}")
     print(f"Loading base labels from {gold_label_base_dir}")
@@ -169,50 +170,6 @@ def process_gold_feature_xgboost(
         f"snapshot_date={snapshot_date_str}"
     )
 
-    # Load base DataFrame
-    # (Reusing the robust data loading logic from your LSTM util)
-    try:
-        df = pd.read_parquet(input_dir, engine='pyarrow')
-    except Exception as e:
-        print(f"Schema conflict detected, reading partitions individually...")
-        parquet_files = glob.glob(os.path.join(input_dir, '**/data.parquet'), recursive=True)
-        if not parquet_files:
-            parquet_files = glob.glob(os.path.join(input_dir, '*.parquet'))
-        
-        print(f"Found {len(parquet_files)} partition files")
-        dfs = []
-        for parquet_file in parquet_files:
-            df_part = pd.read_parquet(parquet_file, engine='pyarrow')
-            for col in df_part.columns:
-                if pd.api.types.is_categorical_dtype(df_part[col]):
-                    df_part[col] = df_part[col].astype(df_part[col].cat.categories.dtype)
-            dfs.append(df_part)
-        
-        df = pd.concat(dfs, ignore_index=True)
-        print(f"Concatenated {len(dfs)} partitions")
-
-    print(f"Loaded {len(df):,} rows from base labels")
-
-    # Verify selected features exist in DataFrame
-    missing_features = [f for f in SELECTED_FEATURES if f not in df.columns]
-    if missing_features:
-        print(f"WARNING: Missing features: {missing_features}")
-        feature_cols = [f for f in SELECTED_FEATURES if f in df.columns]
-    else:
-        feature_cols = SELECTED_FEATURES
-
-    print(f"Using {len(feature_cols)} features: {feature_cols}")
-
-    # Create unique unit identifier
-    df['unit'] = df.apply(lambda row: f"DS{int(row['dataset']):02d}_{int(row['unit_orig']):03d}", axis=1)
-
-    # --- XGBoost Feature Engineering ---
-    # Apply the multi-scale feature creation function to the entire DataFrame
-    print("\n🚀 Applying multi-scale feature engineering for XGBoost...")
-    df_features = create_multiscale_features(df, feature_cols)
-    print("Feature engineering complete.")
-    # ---------------------------------
-
     # Create output directory
     output_dir = os.path.join(
         gold_feature_xgboost_dir,
@@ -220,19 +177,103 @@ def process_gold_feature_xgboost(
     )
     os.makedirs(output_dir, exist_ok=True)
 
-    # Save the final DataFrame as a single Parquet file
-    output_file = os.path.join(output_dir, 'features.parquet')
-    try:
-        df_features.to_parquet(output_file, index=False, engine='pyarrow', compression='snappy')
-        print(f"\n✅ Saved XGBoost features ({df_features.shape}) to {output_file}")
-    except Exception as e:
-        print(f"\n❌ Error saving Parquet file: {e}")
-        print("Attempting to save with engine='fastparquet'...")
-        try:
-            df_features.to_parquet(output_file, index=False, engine='fastparquet', compression='snappy')
-            print(f"\n✅ Saved XGBoost features ({df_features.shape}) with fastparquet to {output_file}")
-        except Exception as e2:
-            print(f"\n❌ Failed to save with fastparquet as well: {e2}")
+    # Check if data is partitioned (dataset=X subdirectories exist)
+    partition_dirs = glob.glob(os.path.join(input_dir, 'dataset=*'))
 
-    print(f"Gold Feature XGBoost written successfully to {output_dir}")
+    if partition_dirs:
+        print(f"\n📦 PARTITIONED MODE: Found {len(partition_dirs)} dataset partitions")
+        print("Processing each dataset separately to minimize memory usage...")
+
+        for partition_dir in sorted(partition_dirs):
+            dataset_name = os.path.basename(partition_dir)  # e.g., "dataset=1"
+            dataset_id = dataset_name.split('=')[1]
+
+            print(f"\n{'='*60}")
+            print(f"Processing {dataset_name}")
+            print(f"{'='*60}")
+
+            # Load this partition
+            partition_file = os.path.join(partition_dir, 'data.parquet')
+            if not os.path.exists(partition_file):
+                print(f"⚠️  Skipping {dataset_name}: data.parquet not found")
+                continue
+
+            df_partition = pd.read_parquet(partition_file, engine='pyarrow')
+            print(f"Loaded {len(df_partition):,} rows from {dataset_name}")
+
+            # Process this partition
+            df_features = _process_partition(df_partition, dataset_name)
+
+            # Save this partition
+            partition_output_dir = os.path.join(output_dir, dataset_name)
+            os.makedirs(partition_output_dir, exist_ok=True)
+            output_file = os.path.join(partition_output_dir, 'features.parquet')
+
+            df_features.to_parquet(output_file, index=False, engine='pyarrow', compression='snappy')
+            print(f"✅ Saved {dataset_name} features ({df_features.shape}) to {output_file}")
+
+            # Free memory
+            del df_partition
+            del df_features
+
+        print(f"\n{'='*60}")
+        print(f"✅ All {len(partition_dirs)} partitions processed successfully")
+        print(f"{'='*60}")
+
+    else:
+        # Single file mode (fallback)
+        print("\n📄 SINGLE FILE MODE: Processing entire dataset at once")
+        single_file = os.path.join(input_dir, 'data.parquet')
+
+        if not os.path.exists(single_file):
+            raise FileNotFoundError(f"No data found at {input_dir}")
+
+        df = pd.read_parquet(single_file, engine='pyarrow')
+        print(f"Loaded {len(df):,} rows from single file")
+
+        # Process entire dataset
+        df_features = _process_partition(df, "all_data")
+
+        # Save as single file
+        output_file = os.path.join(output_dir, 'features.parquet')
+        df_features.to_parquet(output_file, index=False, engine='pyarrow', compression='snappy')
+        print(f"✅ Saved features ({df_features.shape}) to {output_file}")
+
+    print(f"\nGold Feature XGBoost written successfully to {output_dir}")
     return output_dir
+
+
+def _process_partition(df: pd.DataFrame, partition_name: str) -> pd.DataFrame:
+    """
+    Process a single partition (dataset) to create XGBoost features.
+
+    Args:
+        df: DataFrame for this partition
+        partition_name: Name of the partition (for logging)
+
+    Returns:
+        DataFrame with engineered features
+    """
+    # Verify selected features exist in DataFrame
+    missing_features = [f for f in SELECTED_FEATURES if f not in df.columns]
+    if missing_features:
+        print(f"WARNING: Missing features in {partition_name}: {missing_features}")
+        feature_cols = [f for f in SELECTED_FEATURES if f in df.columns]
+    else:
+        feature_cols = SELECTED_FEATURES
+
+    print(f"Using {len(feature_cols)} features: {feature_cols}")
+
+    # Verify unit column exists (should be created by gold_label_base)
+    if 'unit' not in df.columns:
+        print(f"WARNING: 'unit' column missing in {partition_name}, creating it...")
+        df['unit'] = df.apply(lambda row: f"DS{int(row['dataset']):02d}_{int(row['unit_orig']):03d}", axis=1)
+    else:
+        print(f"✓ Using existing 'unit' column ({df['unit'].nunique()} unique units)")
+
+    # Apply multi-scale feature engineering
+    print(f"\n🚀 Applying multi-scale feature engineering for {partition_name}...")
+    df_features = create_multiscale_features(df, feature_cols)
+    print(f"Feature engineering complete for {partition_name}.")
+
+    return df_features

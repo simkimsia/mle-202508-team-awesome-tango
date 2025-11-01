@@ -15,8 +15,8 @@ def main(snapshotdate):
 
     # Define input/output directories
     snapshot_date_str = snapshotdate
-    gold_label_base_dir = f"datamart/gold/label_base/n_cmapss"
-    gold_feature_xgboost_dir = f"datamart/gold/feature/xgboost/n_cmapss"
+    gold_label_base_dir = "datamart/gold/label_base/n_cmapss"
+    gold_feature_xgboost_dir = "datamart/gold/feature/xgboost/n_cmapss"
 
     print(f"Input directory: {gold_label_base_dir}")
     print(f"Output directory: {gold_feature_xgboost_dir}")
