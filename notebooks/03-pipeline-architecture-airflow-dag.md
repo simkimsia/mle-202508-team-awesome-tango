@@ -638,3 +638,17 @@ This pipeline architecture provides:
 6. **Scalability** - New models can be added by creating new gold layer branches
 
 The design ensures that data transformations are explicit, testable, and maintainable while supporting the different requirements of sequence-based (LSTM) and tabular (XGBoost) models.
+
+## Next Steps
+
+  1. Implement utils functions - Create the actual processing logic in utils/ directory:
+    - data_processing_bronze_ncmapss.py
+    - data_processing_silver_ncmapss.py
+    - data_processing_gold_label_base.py
+    - data_processing_gold_label_lstm.py
+    - data_processing_gold_label_xgboost.py
+    - data_processing_gold_feature_lstm.py
+    - data_processing_gold_feature_xgboost.py
+  2. Clean up old files - Remove bronze_table_1.py and silver_table_1.py
+  3. Test the pipeline - Run each script sequentially to verify the data flow
+  4. Deploy to Airflow - Test the DAG in Airflow environment
