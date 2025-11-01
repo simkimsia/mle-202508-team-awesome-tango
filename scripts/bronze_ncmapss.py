@@ -14,9 +14,7 @@ import pprint
 # from pyspark.sql.functions import col
 # from pyspark.sql.types import StringType, IntegerType, FloatType, DateType
 
-import utils.data_processing_bronze_table
-# import utils.data_processing_silver_table
-# import utils.data_processing_gold_table
+import utils.data_processing_bronze_ncmapss
 
 # to call this script: python bronze_label_store.py --snapshotdate "2023-01-01"
 
@@ -42,7 +40,7 @@ def main(snapshotdate):
         os.makedirs(bronze_lms_directory)
 
     # run data processing
-    utils.data_processing_bronze_table.process_bronze_table(
+    utils.data_processing_bronze_ncmapss.process_bronze_table(
         snapshot_date_str,
         bronze_lms_directory
         # spark

@@ -1,14 +1,7 @@
-#!/usr/bin/env python3
-"""
-Driver script to create Silver table from Bronze data.
-Usage:
-    python3 silver_table_1.py --snapshotdate "2023-01-01"
-"""
-
 import os
 import argparse
 import pyspark
-from utils import data_processing_silver_table
+from utils import data_processing_silver_ncmapss
 
 def main(snapshotdate):
     print("\n\n--- Starting Silver job ---\n\n")
@@ -33,7 +26,7 @@ def main(snapshotdate):
 
     os.makedirs(silver_dir, exist_ok=True)
 
-    data_processing_silver_table.process_silver_table(
+    data_processing_silver_ncmapss.process_silver_table(
         spark,
         bronze_dir,
         silver_dir,
