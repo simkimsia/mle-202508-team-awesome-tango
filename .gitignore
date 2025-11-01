@@ -64,5 +64,9 @@ darts_logs/
 !plots/*.jpg
 
 
+!scripts/datamart/.gitkeep
+!scripts/data/.gitkeep
 scripts/datamart
 scripts/data
+
+
