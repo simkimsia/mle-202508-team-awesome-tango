@@ -11,7 +11,7 @@ from utils import data_processing_gold_feature_xgboost
 
 
 def main(snapshotdate):
-    print("\n\n--- Starting Gold LSTM Feature N-CMAPSS job ---\n\n")
+    print("\n\n--- Starting Gold XGBoost Feature N-CMAPSS job ---\n\n")
 
     # Define input/output directories
     snapshot_date_str = snapshotdate
@@ -22,11 +22,11 @@ def main(snapshotdate):
     print(f"Output directory: {gold_feature_xgboost_dir}")
 
     # Process XGBoost features
-    # Creates TimeSeries objects with selected features for this snapshot date
+    # Creates tabular features with multi-scale rolling windows for this snapshot date
     # Temporal splitting (train/val/test/oot) is handled at DAG level
-    data_processing_gold_feature_xgboost.process_gold_feature_lstm(
+    data_processing_gold_feature_xgboost.process_gold_feature_xgboost(
         gold_label_base_dir,
-        gold_feature_lstm_dir,
+        gold_feature_xgboost_dir,
         snapshot_date_str
     )
 

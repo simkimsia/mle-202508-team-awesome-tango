@@ -55,14 +55,15 @@ with DAG(
     )
 
     # --- 4. Gold Layer: LSTM Label Store ---
-    gold_label_lstm_ncmapss = BashOperator(
-        task_id="gold_label_lstm_ncmapss",
-        bash_command=(
-            "cd /opt/airflow/scripts && "
-            "python3 gold_label_lstm_ncmapss.py "
-            '--snapshotdate "{{ ds }}"'
-        ),
-    )
+    # TODO: Waiting for teammate to provide LSTM scaler
+    # gold_label_lstm_ncmapss = BashOperator(
+    #     task_id="gold_label_lstm_ncmapss",
+    #     bash_command=(
+    #         "cd /opt/airflow/scripts && "
+    #         "python3 gold_label_lstm_ncmapss.py "
+    #         '--snapshotdate "{{ ds }}"'
+    #     ),
+    # )
 
     # --- 5. Gold Layer: XGBoost Label Store ---
     gold_label_xgboost_ncmapss = BashOperator(
@@ -75,14 +76,14 @@ with DAG(
     )
 
     # --- 6. Gold Layer: LSTM Feature Store ---
-    gold_feature_lstm_ncmapss = BashOperator(
-        task_id="gold_feature_lstm_ncmapss",
-        bash_command=(
-            "cd /opt/airflow/scripts && "
-            "python3 gold_feature_lstm_ncmapss.py "
-            '--snapshotdate "{{ ds }}"'
-        ),
-    )
+    # gold_feature_lstm_ncmapss = BashOperator(
+    #     task_id="gold_feature_lstm_ncmapss",
+    #     bash_command=(
+    #         "cd /opt/airflow/scripts && "
+    #         "python3 gold_feature_lstm_ncmapss.py "
+    #         '--snapshotdate "{{ ds }}"'
+    #     ),
+    # )
 
     # --- 7. Gold Layer: XGBoost Feature Store ---
     gold_feature_xgboost_ncmapss = BashOperator(
@@ -99,13 +100,15 @@ with DAG(
     start_pipeline >> bronze_ncmapss >> silver_ncmapss >> gold_label_base_ncmapss
 
     # Parallel: Gold Label Base → [LSTM Label, XGBoost Label]
-    gold_label_base_ncmapss >> [gold_label_lstm_ncmapss, gold_label_xgboost_ncmapss]
+    # gold_label_base_ncmapss >> [gold_label_lstm_ncmapss, gold_label_xgboost_ncmapss]
+    gold_label_base_ncmapss >> [gold_label_xgboost_ncmapss]
 
     # Sequential: LSTM Label → LSTM Features
-    gold_label_lstm_ncmapss >> gold_feature_lstm_ncmapss
+    # gold_label_lstm_ncmapss >> gold_feature_lstm_ncmapss
 
     # Sequential: XGBoost Label → XGBoost Features
     gold_label_xgboost_ncmapss >> gold_feature_xgboost_ncmapss
 
     # Converge: Both feature stores → End
-    [gold_feature_lstm_ncmapss, gold_feature_xgboost_ncmapss] >> end_pipeline
+    # [gold_feature_lstm_ncmapss, gold_feature_xgboost_ncmapss] >> end_pipeline
+    [gold_feature_xgboost_ncmapss] >> end_pipeline

@@ -119,6 +119,12 @@ def process_gold_label_base(
     df = df.rename(columns=columns_to_rename)
     print(f"Renamed {len(columns_to_rename)} columns to descriptive names")
 
+    # Create unique unit identifier matching notebook format: DS{dataset:02d}_{unit_orig:03d}
+    # This prevents conflicts where same unit_orig exists in different datasets
+    # Example: dataset=1, unit_orig=1 → 'DS01_001'
+    df['unit'] = df.apply(lambda row: f"DS{int(row['dataset']):02d}_{int(row['unit_orig']):03d}", axis=1)
+    print("Created unit column (format: DS{dataset:02d}_{unit_orig:03d})")
+
     # Create RUL_Clipped column
     df['RUL_Clipped'] = np.clip(df['Remaining_Useful_Life'], 0, RUL_CLIP_MAX)
     print(f"Created RUL_Clipped column (clipped at {RUL_CLIP_MAX})")
