@@ -19,15 +19,15 @@ def main(snapshotdate):
 
     # Define input/output directories
     snapshot_date_str = snapshotdate
-    gold_label_dir = f"datamart/gold/label/n_cmapss/snapshot_date={snapshot_date_str}"
-    gold_feature_dir = f"datamart/gold/feature/lstm/n_cmapss/snapshot_date={snapshot_date_str}"
+    gold_label_base_dir = f"datamart/gold/label_base/n_cmapss/snapshot_date={snapshot_date_str}"
+    gold_feature_lstm_dir = f"datamart/gold/feature/lstm/n_cmapss/snapshot_date={snapshot_date_str}"
 
     # Create output directories for each split
     for split in ['train', 'val', 'test', 'oot']:
-        os.makedirs(f"{gold_feature_dir}/{split}", exist_ok=True)
+        os.makedirs(f"{gold_feature_lstm_dir}/{split}", exist_ok=True)
 
-    print(f"Input directory: {gold_label_dir}")
-    print(f"Output directory: {gold_feature_dir}")
+    print(f"Input directory: {gold_label_base_dir}")
+    print(f"Output directory: {gold_feature_lstm_dir}")
 
     # Configuration
     SELECTED_FEATURES = [
@@ -49,25 +49,27 @@ def main(snapshotdate):
 
     # TODO: Implement LSTM feature engineering
     # Tasks:
-    # 1. Load train/val/test/oot DataFrames from gold label layer
+    # 1. Load train/val/test/oot DataFrames from gold label base layer
     # 2. Select 12 features from SELECTED_FEATURES
     # 3. For each split:
-    #    a. Create Darts TimeSeries objects (one per engine unit)
-    #    b. Separate covariates (features) and targets (RUL_Clipped)
+    #    a. Group by engine unit
+    #    b. Create Darts TimeSeries objects (one per engine unit)
+    #       - Each TimeSeries contains 12 feature values indexed by time
+    #       - Format: TimeSeries with columns=SELECTED_FEATURES, index=time
+    #    c. Collect all engine TimeSeries into a list
     # 4. Normalize features:
     #    - Fit Scaler on training covariates
     #    - Transform val/test/oot covariates
-    # 5. Normalize targets:
-    #    - Fit separate Scaler on training targets
-    #    - Transform val/test/oot targets
-    # 6. Save TimeSeries objects:
-    #    - train/covariates.pkl, train/targets.pkl, train/units.pkl
-    #    - val/covariates.pkl, val/targets.pkl, val/units.pkl
-    #    - test/covariates.pkl, test/targets.pkl, test/units.pkl
-    #    - oot/covariates.pkl, oot/targets.pkl, oot/units.pkl
-    # 7. Save scalers:
-    #    - feature_scaler.pkl
-    #    - target_scaler.pkl
+    # 5. Save outputs:
+    #    - train/covariates.pkl (list of 39 TimeSeries, each shape: (time_steps, 12))
+    #    - train/units.pkl (list of 39 unit IDs)
+    #    - val/covariates.pkl (list of 7 TimeSeries)
+    #    - val/units.pkl (list of 7 unit IDs)
+    #    - test/covariates.pkl (list of 9 TimeSeries)
+    #    - test/units.pkl (list of 9 unit IDs)
+    #    - oot/covariates.pkl (list of 19 TimeSeries)
+    #    - oot/units.pkl (list of 19 unit IDs)
+    #    - feature_scaler.pkl (fitted Scaler object)
 
     # Expected output structure per engine:
     # - Covariates: TimeSeries (time_steps, 12)
@@ -76,8 +78,8 @@ def main(snapshotdate):
 
     # Call processing function (to be implemented in utils)
     # data_processing_gold_feature_lstm.process_gold_feature_lstm(
-    #     gold_label_dir,
-    #     gold_feature_dir,
+    #     gold_label_base_dir,
+    #     gold_feature_lstm_dir,
     #     snapshot_date_str,
     #     SELECTED_FEATURES,
     #     SEQUENCE_LENGTH
