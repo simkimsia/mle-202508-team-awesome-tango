@@ -17,6 +17,7 @@ This document describes the complete data pipeline architecture implemented in A
 The pipeline implements a **7-stage data processing workflow** that transforms raw N-CMAPSS HDF5 files into model-ready features for both LSTM and XGBoost models.
 
 **Key Design Principles:**
+
 1. **Medallion Architecture**: Bronze (raw) → Silver (cleaned) → Gold (model-specific)
 2. **Separation of Concerns**: Labels and features are processed independently
 3. **Model-Specific Processing**: Each model gets data in its optimal format
@@ -73,9 +74,11 @@ start_pipeline
 **Script:** `scripts/bronze_ncmapss.py`
 
 **Input:**
+
 - 7 HDF5 files: `data/N-CMAPSS_DS01.h5` through `DS07.h5`
 
 **Processing:**
+
 1. Load each HDF5 file using `h5py`
 2. Extract arrays: W, X_s, X_v, A, Y, T
 3. Concatenate dev and test splits
@@ -83,6 +86,7 @@ start_pipeline
 5. Save as parquet files
 
 **Output:**
+
 - Directory: `datamart/bronze/n_cmapss/snapshot_date={YYYY-MM-DD}/`
 - Format: Parquet
 - Shape: ~54.9M rows × 32 features
@@ -99,9 +103,11 @@ start_pipeline
 **Script:** `scripts/silver_ncmapss.py`
 
 **Input:**
+
 - Bronze parquet files from previous step
 
 **Processing:**
+
 1. Load bronze parquet files
 2. Rename columns using `COLUMN_RENAME_MAP`
 3. Create composite unit identifier: `DS{dataset:02d}_{unit_orig:03d}`
@@ -109,6 +115,7 @@ start_pipeline
 5. Save cleaned DataFrame
 
 **Output:**
+
 - Directory: `datamart/silver/n_cmapss/snapshot_date={YYYY-MM-DD}/`
 - Format: Parquet
 - Shape: ~54.9M rows × 38 columns
@@ -125,9 +132,11 @@ start_pipeline
 **Script:** `scripts/gold_label_base_ncmapss.py`
 
 **Input:**
+
 - Silver parquet from previous step
 
 **Configuration:**
+
 ```python
 RUL_CLIP_MAX = 90
 TRAIN_SETS = [1, 3, 4, 5, 6]  # Internal datasets
@@ -135,6 +144,7 @@ OOT_SETS = [2, 7]              # Out-of-time datasets
 ```
 
 **Processing:**
+
 1. Load silver DataFrame
 2. Create `RUL_Clipped = clip(Remaining Useful Life, upper=90)`
 3. Split data by engine units:
@@ -145,6 +155,7 @@ OOT_SETS = [2, 7]              # Out-of-time datasets
 5. Save split metadata (unit lists)
 
 **Output:**
+
 - Directory: `datamart/gold/label_base/n_cmapss/snapshot_date={YYYY-MM-DD}/`
 - Format: Parquet (DataFrame)
 - Files:
@@ -165,9 +176,11 @@ OOT_SETS = [2, 7]              # Out-of-time datasets
 **Script:** `scripts/gold_label_lstm_ncmapss.py`
 
 **Input:**
+
 - Label base DataFrames from previous step
 
 **Processing:**
+
 1. Load train/val/test/oot parquet files
 2. For each split:
    - Group by engine unit
@@ -179,6 +192,7 @@ OOT_SETS = [2, 7]              # Out-of-time datasets
 4. Save TimeSeries objects and scaler
 
 **Output:**
+
 - Directory: `datamart/gold/label/lstm/n_cmapss/snapshot_date={YYYY-MM-DD}/`
 - Format: Pickle (Darts TimeSeries)
 - Files:
@@ -200,9 +214,11 @@ OOT_SETS = [2, 7]              # Out-of-time datasets
 **Script:** `scripts/gold_label_xgboost_ncmapss.py`
 
 **Input:**
+
 - Label base DataFrames from gold_label_base_ncmapss
 
 **Processing:**
+
 1. Load train/val/test/oot parquet files
 2. For each split:
    - Extract label columns: `unit`, `time`, `RUL_Clipped`
@@ -210,6 +226,7 @@ OOT_SETS = [2, 7]              # Out-of-time datasets
 3. Save label DataFrames
 
 **Output:**
+
 - Directory: `datamart/gold/label/xgboost/n_cmapss/snapshot_date={YYYY-MM-DD}/`
 - Format: Parquet (DataFrame)
 - Files:
@@ -229,9 +246,11 @@ OOT_SETS = [2, 7]              # Out-of-time datasets
 **Script:** `scripts/gold_feature_lstm_ncmapss.py`
 
 **Input:**
+
 - Label base DataFrames from gold_label_base_ncmapss
 
 **Configuration:**
+
 ```python
 SELECTED_FEATURES = [
     'HPC Outlet Pressure',
@@ -252,6 +271,7 @@ SEQUENCE_LENGTH = 30  # Lookback window
 ```
 
 **Processing:**
+
 1. Load train/val/test/oot DataFrames
 2. Select 12 features from SELECTED_FEATURES
 3. For each split:
@@ -264,6 +284,7 @@ SEQUENCE_LENGTH = 30  # Lookback window
 5. Save TimeSeries objects and scaler
 
 **Output:**
+
 - Directory: `datamart/gold/feature/lstm/n_cmapss/snapshot_date={YYYY-MM-DD}/`
 - Format: Pickle (Darts TimeSeries)
 - Files:
@@ -285,9 +306,11 @@ SEQUENCE_LENGTH = 30  # Lookback window
 **Script:** `scripts/gold_feature_xgboost_ncmapss.py`
 
 **Input:**
+
 - Label base DataFrames from gold_label_base_ncmapss
 
 **Configuration:**
+
 ```python
 SELECTED_FEATURES = [
     # Same 12 features as LSTM
@@ -301,6 +324,7 @@ WINDOWS = {
 ```
 
 **Processing:**
+
 1. Load train/val/test/oot DataFrames
 2. Convert features to float32 (memory optimization)
 3. For each of 12 features, create:
@@ -311,6 +335,7 @@ WINDOWS = {
 5. Save engineered DataFrames
 
 **Output:**
+
 - Directory: `datamart/gold/feature/xgboost/n_cmapss/snapshot_date={YYYY-MM-DD}/`
 - Format: Parquet (DataFrame, float32)
 - Files:
@@ -477,6 +502,7 @@ datamart/
 **Output:** Parquet files with raw arrays
 
 **Key Transformations:**
+
 - Load HDF5 arrays
 - Concatenate dev/test splits
 - Add dataset identifier
@@ -491,6 +517,7 @@ datamart/
 **Output:** Single cleaned DataFrame (54,874,178 rows × 38 columns)
 
 **Key Transformations:**
+
 - Rename columns (human-readable)
 - Create composite unit IDs
 - Data validation
@@ -505,6 +532,7 @@ datamart/
 **Output:** 4 split DataFrames (train/val/test/oot)
 
 **Key Transformations:**
+
 - Create RUL_Clipped (clip at 90 cycles)
 - Split by engine units:
   - OOT: Datasets 2, 7 (19 engines)
@@ -521,17 +549,20 @@ datamart/
 **Input:** Base label DataFrames
 
 **LSTM Labels:**
+
 - Convert to TimeSeries objects (per-engine sequences)
 - Normalize to [0, 1]
 - Save as pickle files
 
 **LSTM Features:**
+
 - Select 12 features
 - Convert to TimeSeries objects (per-engine sequences)
 - Normalize to [0, 1]
 - Save as pickle files
 
 **Final Output for LSTM Model:**
+
 - Covariates: List[TimeSeries] with shape (time_steps, 12)
 - Targets: List[TimeSeries] with shape (time_steps, 1)
 - Both normalized to [0, 1]
@@ -543,11 +574,13 @@ datamart/
 **Input:** Base label DataFrames
 
 **XGBoost Labels:**
+
 - Extract unit, time, RUL_Clipped
 - Keep as DataFrame
 - Save as parquet
 
 **XGBoost Features:**
+
 - Select 12 base features
 - Create rolling statistics:
   - Mean (3 windows × 12 features = 36)
@@ -557,6 +590,7 @@ datamart/
 - Save as parquet (float32)
 
 **Final Output for XGBoost Model:**
+
 - Features: DataFrame (samples, 96 features)
 - Labels: DataFrame (samples, 3 columns)
 - Both in tabular format
@@ -612,6 +646,7 @@ gold_label_base_ncmapss >> gold_label_xgboost_ncmapss >> gold_feature_xgboost_nc
 ```
 
 **Execution Order:**
+
 1. Start → Bronze → Silver → Gold Label Base (linear, sequential)
 2. Gold Label Base → [LSTM Label, XGBoost Label] (parallel)
 3. LSTM Label → LSTM Feature (sequential)
