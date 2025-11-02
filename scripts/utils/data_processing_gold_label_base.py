@@ -144,8 +144,10 @@ def process_gold_label_base(
 
             output_path = os.path.join(dataset_output_dir, 'data.parquet')
             # Write with consistent schema to avoid PyArrow type conflicts
+            # Drop 'dataset' column since it's encoded in the directory name (dataset=X)
+            # PyArrow will automatically restore it when reading partitioned data
             # Disable dictionary encoding to prevent schema conflicts
-            df_dataset.to_parquet(
+            df_dataset.drop(columns=['dataset']).to_parquet(
                 output_path,
                 index=False,
                 engine='pyarrow',
