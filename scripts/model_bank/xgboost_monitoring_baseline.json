@@ -1,0 +1,12 @@
+{
+  "baseline": {
+    "rmse": 18.2091,
+    "mae": 14.6529
+  },
+  "thresholds": {
+    "rmse_warning_multiplier": 1.15,
+    "rmse_critical_multiplier": 1.30,
+    "mae_warning_multiplier": 1.20,
+    "mae_critical_multiplier": 1.40
+  }
+}

@@ -29,7 +29,7 @@ def should_run_inference(ds, **kwargs):
 
     # Parse the execution date (ds is in YYYY-MM-DD format)
     execution_date = datetime.strptime(ds, "%Y-%m-%d")
-    cutoff_date = datetime(2025, 1, 8)
+    cutoff_date = datetime(2025, 1, 9)
 
     print(f"\n{'=' * 60}")
     print("Checking inference prerequisites...")
@@ -114,7 +114,7 @@ with DAG(
     description="data pipeline run daily",
     schedule_interval="0 0 * * *",  # At 00:00 on everyday
     start_date=datetime(2025, 1, 1),
-    end_date=datetime(2025, 1, 8),
+    end_date=datetime(2025, 1, 10),
     catchup=True,
 ) as dag:
     # --- 0. Start / End Markers ---
@@ -209,6 +209,16 @@ with DAG(
         ),
     )
 
+    # --- 10. Monitoring: XGBoost Performance Metrics ---
+    monitor_xgboost_metrics = BashOperator(
+        task_id="monitor_xgboost_metrics",
+        bash_command=(
+            "cd /opt/airflow/scripts && "
+            "python3 monitor_xgboost_ncmapss.py "
+            '--snapshotdate "{{ ds }}"'
+        ),
+    )
+
     # --- Task Dependencies ---
     # Linear: Bronze → Silver → Gold Label Base
     start_pipeline >> bronze_ncmapss >> silver_ncmapss >> gold_label_base_ncmapss
@@ -226,8 +236,9 @@ with DAG(
         >> gold_feature_xgboost_ncmapss
         >> check_inference_prerequisites
         >> inference_xgboost_ncmapss
+        >> monitor_xgboost_metrics
     )
 
     # Converge: Both feature stores + inference → End
     # [gold_feature_lstm_ncmapss, inference_xgboost_ncmapss] >> end_pipeline
-    [inference_xgboost_ncmapss] >> end_pipeline
+    [monitor_xgboost_metrics] >> end_pipeline
