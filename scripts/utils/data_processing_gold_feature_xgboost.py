@@ -14,19 +14,20 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 # Selected features for the model (12 unique features)
+# Must match the descriptive column names in the DataFrame
 SELECTED_FEATURES = [
-    'P30',        # HPC Outlet Pressure
-    'W32',        # LPT Coolant Bleed
-    'P2',        # Fan Inlet Pressure
-    'W50',         # Demanded Fan Speed
-    'Nf',          # Fan Speed
-    'Nc',         # Core Speed
-    'P15',       # Pressure in Bypass Duct
-    'phi',        # Fuel Flow Ratio
-    'T50',        # LPT Outlet Temperature
-    'Altitude',   # Altitude
-    'Mach_Number',# Mach Number
-    'TRA'         # Throttle Resolver Angle
+    'HPC Outlet Pressure',      # P30
+    'LPT Coolant Bleed',        # W32
+    'Fan Inlet Pressure',       # P2
+    'Demanded Fan Speed',       # W50
+    'Fan Speed',                # Nf
+    'Core Speed',               # Nc
+    'Pressure in Bypass Duct',  # P15
+    'Fuel Flow Ratio',          # phi
+    'LPT Outlet Temperature',   # T50
+    'Altitude',                 # Altitude
+    'Mach Number',              # Mach_Number
+    'Throttle Resolver Angle'   # TRA
 ]
 
 
@@ -201,6 +202,9 @@ def process_gold_feature_xgboost(
             df_partition = pd.read_parquet(partition_file, engine='pyarrow')
             print(f"Loaded {len(df_partition):,} rows from {dataset_name}")
 
+            # Add dataset column (it's partitioned, so not in the parquet file)
+            df_partition['dataset'] = int(dataset_id)
+
             # Process this partition
             df_features = _process_partition(df_partition, dataset_name)
 
@@ -275,5 +279,26 @@ def _process_partition(df: pd.DataFrame, partition_name: str) -> pd.DataFrame:
     print(f"\n🚀 Applying multi-scale feature engineering for {partition_name}...")
     df_features = create_multiscale_features(df, feature_cols)
     print(f"Feature engineering complete for {partition_name}.")
+
+    # Keep only: SELECTED_FEATURES + rolling window features + metadata
+    # This ensures we have exactly 96 features (12 original + 84 rolling)
+    rolling_feature_cols = [col for col in df_features.columns
+                           if any(x in col for x in ['_mean_', '_std_', '_acceleration'])]
+    metadata_cols = ['unit', 'time', 'RUL_Clipped', 'dataset']
+
+    # Columns to keep: metadata + selected features + rolling features
+    cols_to_keep = (
+        [col for col in metadata_cols if col in df_features.columns] +
+        [col for col in feature_cols if col in df_features.columns] +
+        rolling_feature_cols
+    )
+
+    df_features = df_features[cols_to_keep]
+
+    print("\n📊 Final feature count:")
+    print(f"  - Original selected features: {len([c for c in feature_cols if c in df_features.columns])}")
+    print(f"  - Rolling window features: {len(rolling_feature_cols)}")
+    print(f"  - Total features: {len([c for c in cols_to_keep if c not in metadata_cols])}")
+    print(f"  - Metadata columns: {len([c for c in metadata_cols if c in df_features.columns])}")
 
     return df_features
