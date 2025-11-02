@@ -70,3 +70,5 @@ scripts/datamart
 scripts/data
 
 
+!scripts/docs/monitoring/.gitkeep
+scripts/docs/monitoring
