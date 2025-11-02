@@ -29,7 +29,7 @@ def should_run_inference(ds, **kwargs):
 
     # Parse the execution date (ds is in YYYY-MM-DD format)
     execution_date = datetime.strptime(ds, "%Y-%m-%d")
-    cutoff_date = datetime(2025, 1, 9)
+    cutoff_date = datetime(2025, 1, 10)
 
     print(f"\n{'=' * 60}")
     print("Checking inference prerequisites...")
