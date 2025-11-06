@@ -1,0 +1,14 @@
+{
+  "baseline": {
+    "rmse": 0.1244,
+    "mae": 0.0366,
+    "mean_pred": 45.0,
+    "std_pred": 30.0
+  },
+  "thresholds": {
+    "rmse_pct_change": 20.0,
+    "mae_pct_change": 20.0,
+    "distribution_pct_change": 20.0
+  },
+  "notes": "Baseline metrics from notebook training results (Test Set). RMSE: 0.1244 cycles (normalized), MAE: 0.0366 cycles. With RUL_CLIP_MAX=90, unnormalized RMSE is approximately 11.2 cycles."
+}
