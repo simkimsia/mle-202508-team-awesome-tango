@@ -335,7 +335,7 @@ docker-compose restart
 - Training: ~14 hours with GPU (longer without) - only runs once if model missing
 - Inference: 10-20 minutes per day
 
-**🎥 [Watch DAG Walkthrough - Loom]()**
+**🎥 [Watch DAG Walkthrough for inference - Loom](https://www.loom.com/share/55b6d46a9ff540818c9d3505ab92a22e)**
 
 ---
 
