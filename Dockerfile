@@ -14,8 +14,10 @@ RUN apt-get update && \
     # Ensure Spark's scripts run with bash instead of dash
     ln -sf /bin/bash /bin/sh
 
-# Set JAVA_HOME to the directory expected by Spark
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+# Set JAVA_HOME dynamically - create symlink that works for any architecture
+RUN JAVA_HOME_DIR=$(dirname $(dirname $(readlink -f $(which java)))) && \
+    ln -sf $JAVA_HOME_DIR /usr/lib/jvm/default-java
+ENV JAVA_HOME=/usr/lib/jvm/default-java
 ENV PATH=$PATH:$JAVA_HOME/bin
 
 # Create directories for pipeline data
