@@ -371,7 +371,7 @@ docker-compose restart
 
 **Runtime**: 2-3 minutes per file
 
-**🎥 [Watch DAG Walkthrough - Loom]()**
+**🎥 [Watch DAG Walkthrough for XGBoost bronze ingestion - Loom](https://www.loom.com/share/406782a0be7f4bd2ac9133c26d594d90)**
 
 ---
 
