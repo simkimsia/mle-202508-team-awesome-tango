@@ -432,7 +432,7 @@ docker-compose restart
 
 **Runtime**: 1-2 minutes
 
-**🎥 [Watch DAG Walkthrough - Loom]()**
+**🎥 [Watch DAG Walkthrough for XGBoost monitoring - Loom](https://www.loom.com/share/d4c5b360dc3c4777b57b22c3add2a9d4)**
 
 ---
 
