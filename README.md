@@ -228,8 +228,182 @@ ls scripts\datamart\inference\xgboost\   # XGBoost predictions
 
 **Runtime Estimates:**
 
-- **Using pre-trained models** (recommended): 20-40 minutes (first run), 10-20 minutes (daily incremental updates)
-- **Training from scratch**: 3-6 hours (first run with GPU), longer without GPU
+- **Using pre-trained models** (recommended): 20-40 minutes (first run)
+- **Training from scratch**: ~1 hour for XGBoost, ~14 hours for LSTM
+
+---
+
+## 🔄 Airflow DAGs Overview
+
+This system uses **8 Airflow DAGs** to orchestrate the complete MLOps pipeline. Each DAG handles a specific stage of the workflow.
+
+### Data Ingestion DAGs
+
+#### 1. `ingest_bronze_lstm` - LSTM Data Ingestion
+
+**Purpose**: Converts raw H5 files to Parquet format (Bronze layer) for LSTM pipeline
+
+**What it does**:
+
+- Reads N-CMAPSS H5 files from `scripts/data/`
+- Extracts sensor readings and operational settings
+- Writes to Bronze layer: `scripts/datamart/bronze/n_cmapss/`
+
+**Runtime**: 2-3 minutes per file
+
+**🎥 [Watch DAG Walkthrough - Loom]()**
+
+---
+
+#### 2. `ingest_bronze_xgboost` - XGBoost Data Ingestion
+
+**Purpose**: Converts raw H5 files to Parquet format (Bronze layer) for XGBoost pipeline
+
+**What it does**:
+- Reads N-CMAPSS H5 files from `scripts/data/`
+- Extracts sensor readings and operational settings
+- Writes to Bronze layer: `scripts/datamart/bronze/n_cmapss/`
+
+**Runtime**: 2-3 minutes per file
+
+**🎥 [Watch DAG Walkthrough - Loom]()**
+
+---
+
+### Preprocessing DAGs
+
+These DAGs are embedded in the inference workflows (not standalone DAGs).
+
+---
+
+### Training DAGs (Optional)
+
+#### 3. `train_lstm_model` - LSTM Model Training
+
+**Purpose**: Trains LSTM model from scratch using DARTS framework
+
+**What it does**:
+- Loads data from Gold layer: `scripts/datamart/gold/lstm/`
+- Trains LSTM model with 30-cycle sequences
+- Saves model artifacts to `scripts/model_bank/`
+  - `darts_lstm_model.pkl`
+  - `darts_target_scaler.pkl`
+  - `darts_covariate_scaler.pkl`
+
+**Runtime**: ~14 hours with GPU (longer without)
+
+**When to run**: Only if you deleted LSTM models to retrain
+
+**🎥 [Watch DAG Walkthrough - Loom]()**
+
+---
+
+#### 4. `train_xgboost_model` - XGBoost Model Training
+
+**Purpose**: Trains XGBoost model from scratch
+
+**What it does**:
+- Loads data from Gold layer: `scripts/datamart/gold/xgboost/`
+- Trains XGBoost model with 96 engineered features
+- Saves model artifacts to `scripts/model_bank/`
+  - `xgboost_rul_model.pkl`
+  - `feature_list.pkl`
+
+**Runtime**: ~1 hour
+
+**When to run**: Only if you deleted XGBoost models to retrain
+
+**🎥 [Watch DAG Walkthrough - Loom]()**
+
+---
+
+### Inference DAGs (Required)
+
+#### 5. `dag_inference_lstm` - LSTM Predictions
+
+**Purpose**: Generates RUL predictions using pre-trained LSTM model
+
+**What it does**:
+- Loads pre-trained LSTM model from `scripts/model_bank/`
+- Preprocesses data (Bronze → Silver → Gold)
+- Runs batch inference on production data (Days 8-10)
+- Writes predictions to: `scripts/datamart/inference/lstm/`
+
+**Runtime**: 10-20 minutes
+
+**🎥 [Watch DAG Walkthrough - Loom]()**
+
+---
+
+#### 6. `dag_inference_xgboost` - XGBoost Predictions
+
+**Purpose**: Generates RUL predictions using pre-trained XGBoost model
+
+**What it does**:
+- Loads pre-trained XGBoost model from `scripts/model_bank/`
+- Preprocesses data (Bronze → Silver → Gold)
+- Runs batch inference on production data (Days 8-10)
+- Writes predictions to: `scripts/datamart/inference/xgboost/`
+
+**Runtime**: 10-20 minutes
+
+**🎥 [Watch DAG Walkthrough - Loom]()**
+
+---
+
+### Monitoring DAGs (Required)
+
+#### 7. `dag_monitoring_lstm` - LSTM Performance Tracking
+
+**Purpose**: Monitors LSTM model performance and detects data drift
+
+**What it does**:
+- Loads inference results from `scripts/datamart/inference/lstm/`
+- Calculates performance metrics (RMSE, MAE, etc.)
+- Detects feature drift and prediction drift
+- Compares against baseline: `scripts/model_bank/lstm_monitoring_baseline.json`
+- Generates monitoring reports
+
+**Runtime**: 1-2 minutes
+
+**🎥 [Watch DAG Walkthrough - Loom]()**
+
+---
+
+#### 8. `dag_monitoring_xgboost` - XGBoost Performance Tracking
+
+**Purpose**: Monitors XGBoost model performance and detects data drift
+
+**What it does**:
+- Loads inference results from `scripts/datamart/inference/xgboost/`
+- Calculates performance metrics (RMSE, MAE, etc.)
+- Detects feature drift and prediction drift
+- Compares against baseline: `scripts/model_bank/xgboost_monitoring_baseline.json`
+- Generates monitoring reports
+
+**Runtime**: 1-2 minutes
+
+**🎥 [Watch DAG Walkthrough - Loom]()**
+
+---
+
+### DAG Execution Order
+
+For a typical production run with pre-trained models:
+
+```mermaid
+graph TD
+    A[ingest_bronze_lstm] --> C[dag_inference_lstm]
+    B[ingest_bronze_xgboost] --> D[dag_inference_xgboost]
+    C --> E[dag_monitoring_lstm]
+    D --> F[dag_monitoring_xgboost]
+```
+
+**Recommended execution sequence:**
+
+1. Enable and run `ingest_bronze_lstm` and `ingest_bronze_xgboost` in parallel
+2. Once ingestion completes, run `dag_inference_lstm` and `dag_inference_xgboost` in parallel
+3. Once inference completes, run `dag_monitoring_lstm` and `dag_monitoring_xgboost` in parallel
 
 ---
 
@@ -251,7 +425,7 @@ Raw H5 → Bronze (Parquet) → Silver (Cleaned) → Gold (Features+Labels)
 |-------|---------|-------------|-------|
 | **1. Ingestion** | H5 → Parquet | 2-3 min | Required |
 | **2. Preprocessing** | Clean & Feature Engineering | 10-15 min | Required |
-| **3. Training** | Model Training | 2-4 hours (GPU) | Optional (pre-trained models provided) |
+| **3. Training** | Model Training | 14 hours (GPU) | Optional (pre-trained models provided) |
 | **4. Inference** | Model Predictions | 10-20 min | Required |
 | **5. Monitoring** | Performance Tracking | 1-2 min | Required |
 
