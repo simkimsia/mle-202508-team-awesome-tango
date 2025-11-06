@@ -44,6 +44,7 @@ desktop.ini
 
 # Ignore large log files
 darts_logs/
+lightning_logs/
 *.log
 
 # Ignore temporary files
@@ -76,5 +77,5 @@ scripts/datamart
 scripts/data
 
 
-!scripts/docs/monitoring/.gitkeep
-scripts/docs/monitoring
+!scripts/reports/.gitkeep
+scripts/reports
