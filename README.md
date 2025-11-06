@@ -353,7 +353,7 @@ docker-compose restart
 
 **Runtime**: 1-2 minutes
 
-**🎥 [Watch DAG Walkthrough - Loom]()**
+**🎥 [Watch DAG Walkthrough for LSTM monitoring - Loom](https://www.loom.com/share/3f68389bf55540a7bc52647e5f62718d)**
 
 ---
 
