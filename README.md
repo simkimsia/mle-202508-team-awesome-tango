@@ -237,6 +237,44 @@ ls scripts\datamart\inference\xgboost\   # XGBoost predictions
 
 This system uses **8 Airflow DAGs** to orchestrate the complete MLOps pipeline. Each DAG handles a specific stage of the workflow.
 
+### DAG Configuration
+
+All DAGs share a centralized configuration in `dags/dag_config.py`. You can modify these settings to control execution behavior:
+
+**Key Settings:**
+
+```python
+SCHEDULE_INTERVAL = "0 0 * * *"      # Daily at midnight (cron format)
+START_DATE = datetime(2025, 1, 8)    # When DAGs begin execution
+END_DATE = datetime(2025, 1, 8)      # When DAGs stop execution
+CATCHUP = True                        # Run missed DAG runs retroactively
+```
+
+**Common Adjustments:**
+
+| Setting | Purpose | Example |
+|---------|---------|---------|
+| `START_DATE` | First date to process | `datetime(2025, 1, 8)` for Day 8 data |
+| `END_DATE` | Last date to process | `datetime(2025, 1, 10)` for Day 8-10 data |
+| `CATCHUP` | Process historical dates | `True` = run all dates, `False` = only latest |
+| `SCHEDULE_INTERVAL` | Run frequency | `"0 0 * * *"` = daily at midnight |
+
+**Example: Process all production days (8-10):**
+
+```python
+START_DATE = datetime(2025, 1, 8)
+END_DATE = datetime(2025, 1, 10)
+CATCHUP = True
+```
+
+After modifying `dag_config.py`, restart Airflow for changes to take effect:
+
+```bash
+docker-compose restart
+```
+
+---
+
 ### Data Ingestion DAGs
 
 #### 1. `ingest_bronze_lstm` - LSTM Data Ingestion
