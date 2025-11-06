@@ -17,7 +17,11 @@ This system implements **Remaining Useful Life (RUL) prediction** for aircraft e
 1. **LSTM (Long Short-Term Memory)** - Deep learning with 30-cycle sequences
 2. **XGBoost** - Gradient boosting with 96 engineered features
 
-Note there are loom video 🎥 links provided throughout this README. Please consult them in case of confusion.
+Note there are loom video 🎥 links (about 10) provided throughout this README. Please consult them in case of confusion.
+
+The url to the repo is [https://github.com/simkimsia/mle-202508-team-awesome-tango](https://github.com/simkimsia/mle-202508-team-awesome-tango) our default branch is `Production_Ready`
+
+
 
 ### Key Features
 
