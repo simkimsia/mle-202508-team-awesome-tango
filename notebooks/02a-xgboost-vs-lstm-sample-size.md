@@ -214,6 +214,69 @@ The fundamental difference lies in how each algorithm handles temporal informati
 
 While we split by units to prevent data leakage (correct for both models), the statistical concern about "insufficient engines" primarily affects sequence-based models like LSTM. XGBoost, even with rolling window features creating dependencies, still has **33,000× more effective validation samples** than LSTM (230K vs 7).
 
+## Critical Distinction: LSTM Sequence Length vs XGBoost Rolling Windows
+
+### Both Use 30 Time Steps—But Very Differently!
+
+**LSTM**: `SEQUENCE_LENGTH = 30` (lookback window)
+**XGBoost**: Rolling windows of 5, 15, and 30 steps
+
+Despite both using 30-step windows, they process data fundamentally differently:
+
+### LSTM's Sequence Length
+
+```python
+SEQUENCE_LENGTH = 30  # Lookback window for LSTM
+```
+
+- LSTM **requires 30 consecutive time steps** as input to make ONE prediction
+- Uses the hidden states to model temporal dependencies across the sequence
+- For an engine with 1000 cycles:
+  - Can make predictions starting from cycle 30 (needs 30 previous cycles)
+  - Generates ~970 predictions (cycles 30-999)
+- However, all predictions for one engine are **temporally connected**
+  - Prediction at t=31 uses states from t=30
+  - Prediction at t=32 uses states from t=31, which used states from t=30, etc.
+- This creates a **dependency chain** across the entire engine lifecycle
+
+### XGBoost's Rolling Windows
+
+```python
+windows = {'short': 5, 'medium': 15, 'long': 30}
+```
+
+- XGBoost uses rolling windows to **compute features** at each time step
+- Each row gets its own set of rolling statistics (mean, std) from past observations
+- For an engine with 1000 cycles:
+  - Can make predictions for nearly all 1000 rows (using `min_periods=1`)
+  - Each prediction uses a 30-step window of features
+- Consecutive predictions share overlapping windows but **no hidden states**
+  - Prediction at t=31 uses windows [t-29:t+1]
+  - Prediction at t=32 uses windows [t-28:t+2]
+  - They overlap but are evaluated independently by the tree model
+
+### The Key Difference
+
+| Aspect | LSTM (Sequence Length) | XGBoost (Rolling Windows) |
+|--------|------------------------|---------------------------|
+| **Purpose** | Input requirement for RNN | Feature engineering |
+| **Dependencies** | Hidden states propagate through entire sequence | Only within window overlap |
+| **Temporal modeling** | Explicit (in architecture) | Implicit (in features) |
+| **Independence** | Entire engine is one connected sequence | Weak dependencies between rows |
+| **Statistical unit** | Engine (all predictions connected) | Row (predictions quasi-independent) |
+
+### Why This Matters for Sample Size
+
+Even though both use 30-step windows:
+
+**LSTM**: The entire engine lifecycle forms one continuous sequence
+- Validation set: **7 complete sequences** (7 engines)
+- All predictions within an engine are part of the same temporal chain
+
+**XGBoost**: Each row is a separate prediction with overlapping features
+- Validation set: **~230K quasi-independent predictions** (6.9M / 30)
+- Overlapping windows create correlation but not sequential dependency
+
 ## Technical Deep Dive: Rolling Window Implementation
 
 ### How Rolling Windows Work in This Implementation
