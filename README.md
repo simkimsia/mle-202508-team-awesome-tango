@@ -132,6 +132,8 @@ If you want to retrain the models:
 
 ## 🚀 Quick Start
 
+**🎥 [How to Quick Start - Watch Loom](https://www.loom.com/share/8e5e48e174ae4860a3391725ec0fdc10)**
+
 ### 1. Prerequisites
 
 - Docker Desktop installed and running with **48GB RAM allocated** (see image below)
