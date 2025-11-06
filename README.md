@@ -204,19 +204,21 @@ docker-compose -f docker-compose.gpu.yaml down
 - Username: `admin` / Password: `admin`
 - Enable DAGs based on your needs:
 
-**Required DAGs (Inference with pre-trained models):**
+**Required DAGs (All stages with pre-trained models):**
 
-- `ingest_bronze_lstm` - Data ingestion for LSTM
-- `ingest_bronze_xgboost` - Data ingestion for XGBoost
-- `dag_inference_lstm` - LSTM predictions
-- `dag_inference_xgboost` - XGBoost predictions
-- `dag_monitoring_lstm` - LSTM performance tracking
-- `dag_monitoring_xgboost` - XGBoost performance tracking
+LSTM Pipeline:
 
-**Optional DAGs (Model training):**
+- `lstm_01_ingestion` - Data ingestion for LSTM
+- `lstm_02_preprocessing` - Data preprocessing for LSTM
+- `lstm_03_training_inference` - LSTM training (if needed) and predictions
+- `lstm_04_monitoring` - LSTM performance tracking
 
-- `train_lstm_model` - Only if you deleted LSTM models to retrain
-- `train_xgboost_model` - Only if you deleted XGBoost models to retrain
+XGBoost Pipeline:
+
+- `xgboost_01_ingestion` - Data ingestion for XGBoost
+- `xgboost_02_preprocessing` - Data preprocessing for XGBoost
+- `xgboost_03_training_inference` - XGBoost training (if needed) and predictions
+- `xgboost_04_monitoring` - XGBoost performance tracking
 
 ### 5. Monitor Progress
 
@@ -235,7 +237,7 @@ ls scripts\datamart\inference\xgboost\   # XGBoost predictions
 
 ## 🔄 Airflow DAGs Overview
 
-This system uses **8 Airflow DAGs** to orchestrate the complete MLOps pipeline. Each DAG handles a specific stage of the workflow.
+This system uses **8 Airflow DAGs** to orchestrate the complete MLOps pipeline. DAGs are grouped by model type (LSTM and XGBoost), with each model having 4 stages: Ingestion, Preprocessing, Training/Inference, and Monitoring.
 
 ### DAG Configuration
 
@@ -275,11 +277,11 @@ docker-compose restart
 
 ---
 
-### Data Ingestion DAGs
+### LSTM Model Pipeline (4 DAGs)
 
-#### 1. `ingest_bronze_lstm` - LSTM Data Ingestion
+#### 1. `lstm_01_ingestion` - LSTM Data Ingestion
 
-**Purpose**: Converts raw H5 files to Parquet format (Bronze layer) for LSTM pipeline
+**Purpose**: Raw data ingestion to Bronze layer
 
 **What it does**:
 
@@ -289,118 +291,65 @@ docker-compose restart
 
 **Runtime**: 2-3 minutes per file
 
-**🎥 [Watch DAG Walkthrough - Loom]()**
+**🎥 [Watch DAG Walkthrough for LSTM bronze ingestion - Loom](https://www.loom.com/edit/cf957bd478a54bc1af4818a5d863f353)**
 
 ---
 
-#### 2. `ingest_bronze_xgboost` - XGBoost Data Ingestion
+#### 2. `lstm_02_preprocessing` - LSTM Data Preprocessing
 
-**Purpose**: Converts raw H5 files to Parquet format (Bronze layer) for XGBoost pipeline
+**Purpose**: Data cleaning and TimeSeries creation
 
 **What it does**:
-- Reads N-CMAPSS H5 files from `scripts/data/`
-- Extracts sensor readings and operational settings
-- Writes to Bronze layer: `scripts/datamart/bronze/n_cmapss/`
 
-**Runtime**: 2-3 minutes per file
+- Cleans Bronze data (removes duplicates, handles missing values)
+- Creates TimeSeries format for LSTM model
+- Generates Gold layer with features and labels
+- Saves to: `scripts/datamart/gold/lstm/`
 
-**🎥 [Watch DAG Walkthrough - Loom]()**
-
----
-
-### Preprocessing DAGs
-
-These DAGs are embedded in the inference workflows (not standalone DAGs).
-
----
-
-### Training DAGs (Optional)
-
-#### 3. `train_lstm_model` - LSTM Model Training
-
-**Purpose**: Trains LSTM model from scratch using DARTS framework
-
-**What it does**:
-- Loads data from Gold layer: `scripts/datamart/gold/lstm/`
-- Trains LSTM model with 30-cycle sequences
-- Saves model artifacts to `scripts/model_bank/`
-  - `darts_lstm_model.pkl`
-  - `darts_target_scaler.pkl`
-  - `darts_covariate_scaler.pkl`
-
-**Runtime**: ~14 hours with GPU (longer without)
-
-**When to run**: Only if you deleted LSTM models to retrain
+**Runtime**: 5-10 minutes per file
 
 **🎥 [Watch DAG Walkthrough - Loom]()**
 
 ---
 
-#### 4. `train_xgboost_model` - XGBoost Model Training
+#### 3. `lstm_03_training_inference` - LSTM Training & Inference
 
-**Purpose**: Trains XGBoost model from scratch
+**Purpose**: Model training (if needed) and batch inference
 
 **What it does**:
-- Loads data from Gold layer: `scripts/datamart/gold/xgboost/`
-- Trains XGBoost model with 96 engineered features
-- Saves model artifacts to `scripts/model_bank/`
-  - `xgboost_rul_model.pkl`
-  - `feature_list.pkl`
 
-**Runtime**: ~1 hour
+- **Training** (only if model missing):
+  - Loads data from Gold layer: `scripts/datamart/gold/lstm/`
+  - Trains LSTM model with 30-cycle sequences
+  - Saves model artifacts to `scripts/model_bank/`
+    - `darts_lstm_model.pkl`
+    - `darts_target_scaler.pkl`
+    - `darts_covariate_scaler.pkl`
+- **Inference** (always runs):
+  - Loads pre-trained LSTM model
+  - Runs batch predictions on production data (Days 8-10)
+  - Writes predictions to: `scripts/datamart/inference/lstm/`
 
-**When to run**: Only if you deleted XGBoost models to retrain
+**Runtime**:
+
+- Training: ~14 hours with GPU (longer without) - only runs once if model missing
+- Inference: 10-20 minutes per day
 
 **🎥 [Watch DAG Walkthrough - Loom]()**
 
 ---
 
-### Inference DAGs (Required)
+#### 4. `lstm_04_monitoring` - LSTM Performance Tracking
 
-#### 5. `dag_inference_lstm` - LSTM Predictions
-
-**Purpose**: Generates RUL predictions using pre-trained LSTM model
+**Purpose**: Model performance monitoring and drift detection
 
 **What it does**:
-- Loads pre-trained LSTM model from `scripts/model_bank/`
-- Preprocesses data (Bronze → Silver → Gold)
-- Runs batch inference on production data (Days 8-10)
-- Writes predictions to: `scripts/datamart/inference/lstm/`
 
-**Runtime**: 10-20 minutes
-
-**🎥 [Watch DAG Walkthrough - Loom]()**
-
----
-
-#### 6. `dag_inference_xgboost` - XGBoost Predictions
-
-**Purpose**: Generates RUL predictions using pre-trained XGBoost model
-
-**What it does**:
-- Loads pre-trained XGBoost model from `scripts/model_bank/`
-- Preprocesses data (Bronze → Silver → Gold)
-- Runs batch inference on production data (Days 8-10)
-- Writes predictions to: `scripts/datamart/inference/xgboost/`
-
-**Runtime**: 10-20 minutes
-
-**🎥 [Watch DAG Walkthrough - Loom]()**
-
----
-
-### Monitoring DAGs (Required)
-
-#### 7. `dag_monitoring_lstm` - LSTM Performance Tracking
-
-**Purpose**: Monitors LSTM model performance and detects data drift
-
-**What it does**:
 - Loads inference results from `scripts/datamart/inference/lstm/`
 - Calculates performance metrics (RMSE, MAE, etc.)
 - Detects feature drift and prediction drift
 - Compares against baseline: `scripts/model_bank/lstm_monitoring_baseline.json`
-- Generates monitoring reports
+- Generates HTML reports and PNG charts
 
 **Runtime**: 1-2 minutes
 
@@ -408,16 +357,78 @@ These DAGs are embedded in the inference workflows (not standalone DAGs).
 
 ---
 
-#### 8. `dag_monitoring_xgboost` - XGBoost Performance Tracking
+### XGBoost Model Pipeline (4 DAGs)
 
-**Purpose**: Monitors XGBoost model performance and detects data drift
+#### 5. `xgboost_01_ingestion` - XGBoost Data Ingestion
+
+**Purpose**: Raw data ingestion to Bronze layer
 
 **What it does**:
+
+- Reads N-CMAPSS H5 files from `scripts/data/`
+- Extracts sensor readings and operational settings
+- Writes to Bronze layer: `scripts/datamart/bronze/n_cmapss/`
+
+**Runtime**: 2-3 minutes per file
+
+**🎥 [Watch DAG Walkthrough - Loom]()**
+
+---
+
+#### 6. `xgboost_02_preprocessing` - XGBoost Data Preprocessing
+
+**Purpose**: Data cleaning and feature engineering
+
+**What it does**:
+
+- Cleans Bronze data (removes duplicates, handles missing values)
+- Engineers 96 features (rolling stats, lags, interactions)
+- Generates Gold layer with features and labels
+- Saves to: `scripts/datamart/gold/xgboost/`
+
+**Runtime**: 5-10 minutes per file
+
+**🎥 [Watch DAG Walkthrough - Loom]()**
+
+---
+
+#### 7. `xgboost_03_training_inference` - XGBoost Training & Inference
+
+**Purpose**: Model training (if needed) and batch inference
+
+**What it does**:
+
+- **Training** (only if model missing):
+  - Loads data from Gold layer: `scripts/datamart/gold/xgboost/`
+  - Trains XGBoost model with 96 engineered features
+  - Saves model artifacts to `scripts/model_bank/`
+    - `xgboost_rul_model.pkl`
+    - `feature_list.pkl`
+- **Inference** (always runs):
+  - Loads pre-trained XGBoost model
+  - Runs batch predictions on production data (Days 8-10)
+  - Writes predictions to: `scripts/datamart/inference/xgboost/`
+
+**Runtime**:
+
+- Training: ~1 hour - only runs once if model missing
+- Inference: 10-20 minutes per day
+
+**🎥 [Watch DAG Walkthrough - Loom]()**
+
+---
+
+#### 8. `xgboost_04_monitoring` - XGBoost Performance Tracking
+
+**Purpose**: Model performance monitoring and drift detection
+
+**What it does**:
+
 - Loads inference results from `scripts/datamart/inference/xgboost/`
 - Calculates performance metrics (RMSE, MAE, etc.)
 - Detects feature drift and prediction drift
 - Compares against baseline: `scripts/model_bank/xgboost_monitoring_baseline.json`
-- Generates monitoring reports
+- Generates HTML reports and PNG charts
 
 **Runtime**: 1-2 minutes
 
@@ -431,17 +442,34 @@ For a typical production run with pre-trained models:
 
 ```mermaid
 graph TD
-    A[ingest_bronze_lstm] --> C[dag_inference_lstm]
-    B[ingest_bronze_xgboost] --> D[dag_inference_xgboost]
-    C --> E[dag_monitoring_lstm]
-    D --> F[dag_monitoring_xgboost]
+    A[lstm_01_ingestion] --> B[lstm_02_preprocessing]
+    B --> C[lstm_03_training_inference]
+    C --> D[lstm_04_monitoring]
+
+    E[xgboost_01_ingestion] --> F[xgboost_02_preprocessing]
+    F --> G[xgboost_03_training_inference]
+    G --> H[xgboost_04_monitoring]
 ```
 
 **Recommended execution sequence:**
 
-1. Enable and run `ingest_bronze_lstm` and `ingest_bronze_xgboost` in parallel
-2. Once ingestion completes, run `dag_inference_lstm` and `dag_inference_xgboost` in parallel
-3. Once inference completes, run `dag_monitoring_lstm` and `dag_monitoring_xgboost` in parallel
+Run one model pipeline end-to-end before starting the other:
+
+**Option 1: LSTM first, then XGBoost**
+
+1. Run LSTM pipeline (all 4 stages):
+   - `lstm_01_ingestion` → `lstm_02_preprocessing` → `lstm_03_training_inference` → `lstm_04_monitoring`
+2. Run XGBoost pipeline (all 4 stages):
+   - `xgboost_01_ingestion` → `xgboost_02_preprocessing` → `xgboost_03_training_inference` → `xgboost_04_monitoring`
+
+**Option 2: XGBoost first, then LSTM**
+
+1. Run XGBoost pipeline (all 4 stages):
+   - `xgboost_01_ingestion` → `xgboost_02_preprocessing` → `xgboost_03_training_inference` → `xgboost_04_monitoring`
+2. Run LSTM pipeline (all 4 stages):
+   - `lstm_01_ingestion` → `lstm_02_preprocessing` → `lstm_03_training_inference` → `lstm_04_monitoring`
+
+**Note**: You can also run both pipelines in parallel if system resources permit, but running end-to-end for one model first is recommended for easier troubleshooting and monitoring.
 
 ---
 
