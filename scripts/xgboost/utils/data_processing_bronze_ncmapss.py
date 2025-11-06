@@ -10,7 +10,7 @@ import pyarrow.parquet as pq
 def process_bronze_table(snapshot_date_str, bronze_lms_directory):
     snapshot_date = datetime.strptime(snapshot_date_str, "%Y-%m-%d")
     table_name = "n_cmapss"
-    filename = f"data/N-CMAPSS_DS_{snapshot_date_str}.h5"
+    filename = f"../data/N-CMAPSS_DS_{snapshot_date_str}.h5"
     if not os.path.exists(filename):
         raise FileNotFoundError(f"File not found: {filename}")
     print(f"Processing Bronze table for snapshot date: {snapshot_date_str}")

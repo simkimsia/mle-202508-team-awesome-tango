@@ -1,30 +1,26 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 import argparse
-import glob
 import os
-import pprint
-import random
-
-from dateutil.relativedelta import relativedelta
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
 
 import utils.data_processing_bronze_ncmapss
 
 def main(snapshotdate):
-    print('\n\n---starting job---\n\n')
+    print(f'\n[BRONZE-XGBOOST] ===== Starting Bronze Ingestion Job =====')
+    print(f'[BRONZE-XGBOOST] Snapshot Date: {snapshotdate}')
+    print(f'[BRONZE-XGBOOST] Processing raw H5 data to Bronze layer (Parquet format)')
     snapshot_date_str = snapshotdate
     bronze_lms_directory = "../datamart/bronze/"
     if not os.path.exists(bronze_lms_directory):
         os.makedirs(bronze_lms_directory)
+        print(f'[BRONZE-XGBOOST] Created bronze directory: {bronze_lms_directory}')
+    print(f'[BRONZE-XGBOOST] Calling bronze processing utility...')
     utils.data_processing_bronze_ncmapss.process_bronze_table(
         snapshot_date_str,
         bronze_lms_directory
     )
-    print('\n\n---completed job---\n\n')
+    print(f'[BRONZE-XGBOOST] ===== Completed Bronze Ingestion Job =====\n')
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="run job")
-    parser.add_argument("--snapshotdate", type=str, required=True, help="YYYY-MM-DD")
+    parser = argparse.ArgumentParser(description="XGBoost Bronze layer ingestion from H5 to Parquet")
+    parser.add_argument("--snapshotdate", type=str, required=True, help="Snapshot date in YYYY-MM-DD format")
     args = parser.parse_args()
     main(args.snapshotdate)
