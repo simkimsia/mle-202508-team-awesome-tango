@@ -306,9 +306,9 @@ docker-compose restart
 - Generates Gold layer with features and labels
 - Saves to: `scripts/datamart/gold/lstm/`
 
-**Runtime**: 5-10 minutes per file
+**Runtime**: 10-15 minutes per file
 
-**🎥 [Watch DAG Walkthrough - Loom]()**
+**🎥 [Watch DAG Walkthrough for silver, gold, preprocessing - Loom](https://www.loom.com/share/8d1ed1efd2434ca98b89141347d4f1c7)**
 
 ---
 
