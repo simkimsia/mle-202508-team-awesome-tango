@@ -3,28 +3,30 @@ XGBoost Pipeline - Stage 2: Data Preprocessing
 ==============================================
 This DAG handles data cleaning, feature engineering, and gold table creation.
 Processes Bronze → Silver → Gold (Label + Features).
-Schedule: Monthly, triggered after ingestion completes
+Schedule: Daily, triggered after ingestion completes
 Features: 96 engineered features (12 base + rolling windows)
 Scaling: RobustScaler applied during training, not preprocessing
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.dummy import DummyOperator
+
+from dag_config import DEFAULT_ARGS, SCHEDULE_INTERVAL, START_DATE, END_DATE, CATCHUP
+
 default_args = {
-    "owner": "airflow",
+    **DEFAULT_ARGS,
     "depends_on_past": True,  # Wait for ingestion to complete
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
 }
+
 with DAG(
     "xgboost_02_preprocessing",
     default_args=default_args,
     description="XGBoost Pipeline Stage 2: Data cleaning and feature engineering",
-    schedule_interval="0 0 * * *",  # daily
-    start_date=datetime(2025, 1, 1),
-    end_date=datetime(2025, 1, 10),  # cut off at 10th Jan
-    catchup=True,
+    schedule_interval=SCHEDULE_INTERVAL,
+    start_date=START_DATE,
+    end_date=END_DATE,
+    catchup=CATCHUP,
     tags=["xgboost", "preprocessing", "silver", "gold"],
 ) as dag:
     start = DummyOperator(task_id="start_preprocessing")

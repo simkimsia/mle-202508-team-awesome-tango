@@ -2,28 +2,28 @@
 XGBoost Pipeline - Stage 1: Data Ingestion
 =========================================
 This DAG handles raw data loading from H5 files into the Bronze layer.
-Runs monthly to ingest new snapshot data.
-Schedule: Monthly on the 1st at 00:00
+Runs daily to ingest new snapshot data.
 Datasets: N-CMAPSS (NASA Commercial Modular Aero-Propulsion System Simulation)
 """
-from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.dummy import DummyOperator
+
+from dag_config import DEFAULT_ARGS, SCHEDULE_INTERVAL, START_DATE, END_DATE, CATCHUP
+
 default_args = {
-    "owner": "airflow",
+    **DEFAULT_ARGS,
     "depends_on_past": False,
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
 }
+
 with DAG(
     "xgboost_01_ingestion",
     default_args=default_args,
     description="XGBoost Pipeline Stage 1: Raw data ingestion to Bronze layer",
-    schedule_interval="0 0 * * *",  # daily
-    start_date=datetime(2025, 1, 1),
-    end_date=datetime(2025, 1, 10),  # cut off at 10th Jan
-    catchup=True,
+    schedule_interval=SCHEDULE_INTERVAL,
+    start_date=START_DATE,
+    end_date=END_DATE,
+    catchup=CATCHUP,
     tags=["xgboost", "ingestion", "bronze"],
 ) as dag:
     start = DummyOperator(task_id="start_ingestion")

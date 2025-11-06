@@ -4,16 +4,18 @@ XGBoost Pipeline - Stage 3: Training & Inference
 This DAG handles model training (if needed) and inference.
 Training is skipped if model exists in model_bank.
 Inference only runs for dates >= 2025-01-01 (after training period).
-Schedule: Monthly, triggered after preprocessing completes
+Schedule: Daily, triggered after preprocessing completes
 Model: XGBoost with 96 features, RobustScaler normalization
 """
-from datetime import datetime, timedelta
+from datetime import datetime
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.dummy import DummyOperator
 from airflow.operators.python import ShortCircuitOperator, BranchPythonOperator
 import os
 import glob
+
+from dag_config import DEFAULT_ARGS, SCHEDULE_INTERVAL, START_DATE, END_DATE, CATCHUP
 def should_run_training(**kwargs):
     """
     Check if training should run.
@@ -75,19 +77,18 @@ def should_run_inference(ds, **kwargs):
     print(f"{'='*60}\n")
     return True
 default_args = {
-    "owner": "airflow",
+    **DEFAULT_ARGS,
     "depends_on_past": True,  # Wait for preprocessing to complete
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
 }
+
 with DAG(
     "xgboost_03_training_inference",
     default_args=default_args,
     description="XGBoost Pipeline Stage 3: Model training (if needed) and inference",
-    schedule_interval="0 0 * * *",  # daily
-    start_date=datetime(2025, 1, 1),
-    end_date=datetime(2025, 1, 10),  # cut off at 10th Jan
-    catchup=True,
+    schedule_interval=SCHEDULE_INTERVAL,
+    start_date=START_DATE,
+    end_date=END_DATE,
+    catchup=CATCHUP,
     tags=["xgboost", "training", "inference"],
 ) as dag:
     start = DummyOperator(task_id="start_training_inference")
