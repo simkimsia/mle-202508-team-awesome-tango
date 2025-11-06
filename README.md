@@ -45,11 +45,25 @@ This system implements **Remaining Useful Life (RUL) prediction** for aircraft e
 
 ### 2. Start Pipeline
 
-```powershell
-cd "F:\MITB Projects\MLE Proj LSTM"
+Choose the appropriate Docker Compose configuration for your platform:
+
+#### Option A: Cross-Platform (CPU-Only)
+For Windows, Linux, or macOS without GPU support:
+
+```bash
 docker-compose up -d
 docker ps  # Verify 3 containers running
 ```
+
+#### Option B: GPU-Enabled (NVIDIA GPUs)
+For systems with NVIDIA GPU and drivers installed:
+
+```bash
+docker-compose -f docker-compose.gpu.yaml up -d
+docker ps  # Verify 3 containers running
+```
+
+**Note**: GPU setup uses `Dockerfile.gpu` and enables GPU acceleration for the LSTM training tasks. The scheduler service will have access to all available NVIDIA GPUs.
 
 ### 3. Access Airflow UI
 
