@@ -47,6 +47,8 @@ Download the N-CMAPSS dataset files from our Google Drive:
 
 **🔗 [Download N-CMAPSS Dataset](https://drive.google.com/drive/folders/1dDBa8WWuScS_q2ws9KqyOlbV4fxx0Awp?usp=sharing)**
 
+**🎥 [How to Download - Watch Loom](https://www.loom.com/share/c0f7a0e65e3647688681ed928af49b10)**
+
 ⚠️ **Note**: This shared drive will be available until **January 1, 2026**.
 
 ![Google Drive Raw Data Files](images/google-drive-raw-data.png)
@@ -341,7 +343,7 @@ scripts/xgboost/
 | Model | Features | RMSE | MAE | Training Time |
 |-------|----------|------|-----|---------------|
 | **LSTM** | 12 sensors, 30-cycle sequences | 0.10-0.15 | 0.03-0.05 | 14 hours (GPU) |
-| **XGBoost** | 96 engineered features | 18 | 0.03-0.05 | 15-30 min (CPU) |
+| **XGBoost** | 96 engineered features | 18.2091 | 14.6529 | 15-30 min (CPU) |
 
 ---
 
