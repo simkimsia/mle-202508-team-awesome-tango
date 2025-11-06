@@ -32,15 +32,16 @@ RUN mkdir -p /opt/airflow/data \
 # Set the working directory
 WORKDIR /opt/airflow
 
-# Copy the requirements file into the container
-COPY requirements.txt ./
+# Copy the GPU requirements file into the container
+COPY requirements.gpu.txt ./requirements.txt
 
 # Switch to the airflow user before installing Python dependencies
 USER airflow
 
-# Install PyTorch CPU version for cross-platform compatibility (Mac, Windows, Linux)
-RUN pip install --no-cache-dir torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cpu
+# Install PyTorch 2.7.0+cu128 first from CUDA 12.8 wheel repository
+# This ensures the specific CUDA version is used for NVIDIA GPU support
+RUN pip install --no-cache-dir torch==2.7.0+cu128 torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu128
 
 # Install remaining Python dependencies using requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt

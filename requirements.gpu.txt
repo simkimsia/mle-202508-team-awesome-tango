@@ -11,6 +11,6 @@ h5py==3.12.1
 pyarrow==17.0.0
 fastparquet==2024.5.0
 darts==0.38.0
-torch
+torch==2.7.0+cu128
 torchvision
 torchaudio
