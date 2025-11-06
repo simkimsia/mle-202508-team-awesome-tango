@@ -1,8 +1,8 @@
 # Aircraft Engine Predictive Maintenance - N-CMAPSS Dataset
 
-[![Python](https://img.shields.io/badge/Python-3.10-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-20.10+-blue.svg)](https://www.docker.com/)
-[![Airflow](https://img.shields.io/badge/Airflow-2.11.0-green.svg)](https://airflow.apache.org/)
+[![Airflow](https://img.shields.io/badge/Airflow-2.10.0-green.svg)](https://airflow.apache.org/)
 
 > Production-grade MLOps pipeline for predicting Remaining Useful Life (RUL) of aircraft engines using deep learning (LSTM) and gradient boosting (XGBoost) models.
 
@@ -17,13 +17,15 @@ This system implements **Remaining Useful Life (RUL) prediction** for aircraft e
 1. **LSTM (Long Short-Term Memory)** - Deep learning with 30-cycle sequences
 2. **XGBoost** - Gradient boosting with 96 engineered features
 
+Note there are loom video 🎥 links provided throughout this README. Please consult them in case of confusion.
+
 ### Key Features
 
 - ✅ **Production-Ready**: Apache Airflow orchestration, Docker containerization
 - ✅ **Medallion Architecture**: Bronze → Silver → Gold data layers
 - ✅ **Automated Pipelines**: 4-stage DAGs (Ingestion, Preprocessing, Training, Monitoring)
 - ✅ **Model Monitoring**: Drift detection, performance tracking, automated reports
-- ✅ **Scalable**: Spark for data processing, monthly incremental updates
+- ✅ **Scalable**: Spark for data processing, daily incremental updates
 
 ### System Requirements
 
@@ -31,8 +33,98 @@ This system implements **Remaining Useful Life (RUL) prediction** for aircraft e
 |-----------|-------------|
 | **OS** | Windows 10/11, Linux, macOS |
 | **Docker** | Desktop 20.10+ |
-| **RAM** | 16GB minimum |
+| **RAM** | **48GB minimum** (see Docker Desktop settings) |
 | **Storage** | 50GB free space |
+| **GPU** | Optional: NVIDIA GPU with drivers (for LSTM acceleration) |
+
+---
+
+## 📥 Dataset Download
+
+### Required Data Files
+
+Download the N-CMAPSS dataset files from our Google Drive:
+
+**🔗 [Download N-CMAPSS Dataset](https://drive.google.com/drive/folders/1dDBa8WWuScS_q2ws9KqyOlbV4fxx0Awp?usp=sharing)**
+
+⚠️ **Note**: This shared drive will be available until **January 1, 2026**.
+
+![Google Drive Raw Data Files](images/google-drive-raw-data.png)
+
+### What to Download
+
+- **Files needed**: `N-CMAPSS_DS_2025-01-01.h5` through `N-CMAPSS_DS_2025-01-10.h5` (10 daily files)
+- **Total size**: ~30GB
+- **Destination**: Place all `.h5` files in `scripts/data/` directory
+
+```bash
+# Expected structure:
+scripts/data/
+├── N-CMAPSS_DS_2025-01-01.h5
+├── N-CMAPSS_DS_2025-01-02.h5
+├── N-CMAPSS_DS_2025-01-03.h5
+├── N-CMAPSS_DS_2025-01-04.h5
+├── N-CMAPSS_DS_2025-01-05.h5
+├── N-CMAPSS_DS_2025-01-06.h5
+├── N-CMAPSS_DS_2025-01-07.h5
+├── N-CMAPSS_DS_2025-01-08.h5
+├── N-CMAPSS_DS_2025-01-09.h5
+└── N-CMAPSS_DS_2025-01-10.h5
+```
+
+### Data Split Information
+
+The 10 daily files are organized for different purposes:
+
+| Date Range | Files | Purpose | Description |
+|------------|-------|---------|-------------|
+| **2025-01-01 to 2025-01-05** | 5 files | **Train/Val/Test** | Model development and evaluation |
+| **2025-01-06 to 2025-01-07** | 2 files | **OOT Set** | Out-of-Time validation (temporal holdout) |
+| **2025-01-08 to 2025-01-10** | 3 files | **Production Inference** | Daily prediction pipeline |
+
+**Notes:**
+
+- **Train/Val/Test (Days 1-5)**: Used for initial model training, hyperparameter tuning, and evaluation
+- **OOT Set (Days 6-7)**: Out-of-Time test set to validate model performance on unseen temporal data
+- **Production Inference (Days 8-10)**: Simulates daily batch predictions in production environment
+
+---
+
+## 🤖 Pre-Trained Models
+
+### Included Models
+
+Pre-trained models are **already provided** in the `scripts/model_bank/` directory. You can use these models immediately without training.
+
+```bash
+scripts/model_bank/
+├── darts_lstm_model.pkl            # Trained LSTM model (DARTS framework)
+├── darts_lstm_model.pkl.ckpt       # LSTM model checkpoint
+├── darts_target_scaler.pkl         # Target (RUL) scaler
+├── darts_covariate_scaler.pkl      # Covariate (features) scaler
+├── xgboost_rul_model.pkl           # Trained XGBoost model
+├── feature_list.pkl                # XGBoost feature names
+├── lstm_monitoring_baseline.json   # LSTM monitoring baseline metrics
+└── xgboost_monitoring_baseline.json # XGBoost monitoring baseline metrics
+```
+
+### Using Pre-Trained Models (Recommended)
+
+**No action needed!** The pipeline will automatically use the provided models for inference.
+
+### Retraining from Scratch (Optional)
+
+If you want to retrain the models:
+
+1. **Delete or move the model files** you want to retrain.
+
+2. **Enable training DAGs** in Airflow:
+   - `train_lstm_model` - Trains LSTM model (~14 hours with GPU, longer without)
+   - `train_xgboost_model` - Trains XGBoost model (~1 hour)
+
+3. **Automatic detection**: The DAG tasks will automatically detect missing models and trigger training.
+
+⚠️ **Note**: Training is computationally intensive. We recommend using the provided models unless you have specific customization needs.
 
 ---
 
@@ -40,38 +132,89 @@ This system implements **Remaining Useful Life (RUL) prediction** for aircraft e
 
 ### 1. Prerequisites
 
-- Docker Desktop installed and running
-- Raw data files in `scripts/data/`: `N-CMAPSS_DS_2025-01-01.h5` through `N-CMAPSS_DS_2025-10-01.h5`
+- Docker Desktop installed and running with **48GB RAM allocated** (see image below)
+- Raw data files downloaded and placed in `scripts/data/` (see Dataset Download section above)
+- Pre-trained models are included in `scripts/model_bank/` (no action needed)
 
-### 2. Start Pipeline
+### 2. Configure Docker Memory
 
-Choose the appropriate Docker Compose configuration for your platform:
+Before starting, ensure Docker Desktop has sufficient memory allocated:
 
-#### Option A: Cross-Platform (CPU-Only)
-For Windows, Linux, or macOS without GPU support:
+1. Open **Docker Desktop** → **Settings** → **Resources**
+2. Set **Memory limit** to **48 GiB** or higher
+3. Click **Apply & Restart**
+
+![Docker Memory Settings](images/docker-memory-limit.png)
+
+### 3. Start Pipeline
+
+Choose the appropriate Docker Compose configuration based on your hardware:
+
+#### Option A: CPU-Only (Default)
+
+For systems without NVIDIA GPU or standard development:
 
 ```bash
+# Start services (uses docker-compose.yaml)
 docker-compose up -d
-docker ps  # Verify 3 containers running
+
+# Verify 3 containers running
+docker ps
+
+# Stop services when done
+docker-compose down
 ```
+
+**Uses these files:**
+
+- `docker-compose.yaml` - Standard CPU configuration
+- `Dockerfile` - Base Python image
+- `requirements.txt` - Dependencies
 
 #### Option B: GPU-Enabled (NVIDIA GPUs)
-For systems with NVIDIA GPU and drivers installed:
+
+For systems with NVIDIA GPU and drivers installed (LSTM acceleration):
 
 ```bash
+# Start services with GPU support (uses docker-compose.gpu.yaml)
 docker-compose -f docker-compose.gpu.yaml up -d
-docker ps  # Verify 3 containers running
+
+# Verify 3 containers running with GPU access
+docker ps
+
+# Stop services when done
+docker-compose -f docker-compose.gpu.yaml down
 ```
 
-**Note**: GPU setup uses `Dockerfile.gpu` and enables GPU acceleration for the LSTM training tasks. The scheduler service will have access to all available NVIDIA GPUs.
+**Uses these files:**
 
-### 3. Access Airflow UI
+- `docker-compose.gpu.yaml` - GPU-enabled configuration
+- `Dockerfile.gpu` - NVIDIA CUDA base image with GPU support
+- `requirements.gpu.txt` - Dependencies
 
-- URL: **http://localhost:8080**
+**Note**: The `-f` flag specifies which compose file to use. GPU setup enables CUDA acceleration for LSTM training tasks, reducing training time significantly.
+
+### 4. Access Airflow UI
+
+- URL: **<http://localhost:8080>**
 - Username: `admin` / Password: `admin`
-- Enable all 8 DAGs
+- Enable DAGs based on your needs:
 
-### 4. Monitor Progress
+**Required DAGs (Inference with pre-trained models):**
+
+- `ingest_bronze_lstm` - Data ingestion for LSTM
+- `ingest_bronze_xgboost` - Data ingestion for XGBoost
+- `dag_inference_lstm` - LSTM predictions
+- `dag_inference_xgboost` - XGBoost predictions
+- `dag_monitoring_lstm` - LSTM performance tracking
+- `dag_monitoring_xgboost` - XGBoost performance tracking
+
+**Optional DAGs (Model training):**
+
+- `train_lstm_model` - Only if you deleted LSTM models to retrain
+- `train_xgboost_model` - Only if you deleted XGBoost models to retrain
+
+### 5. Monitor Progress
 
 ```powershell
 ls scripts\datamart\bronze\n_cmapss\     # Bronze layer
@@ -79,7 +222,10 @@ ls scripts\datamart\inference\lstm\      # LSTM predictions
 ls scripts\datamart\inference\xgboost\   # XGBoost predictions
 ```
 
-**Runtime**: 3-6 hours (first run), 20-40 minutes (monthly updates)
+**Runtime Estimates:**
+
+- **Using pre-trained models** (recommended): 20-40 minutes (first run), 10-20 minutes (daily incremental updates)
+- **Training from scratch**: 3-6 hours (first run with GPU), longer without GPU
 
 ---
 
@@ -97,31 +243,96 @@ Raw H5 → Bronze (Parquet) → Silver (Cleaned) → Gold (Features+Labels)
 
 ### Pipeline Stages
 
-| Stage | Purpose | Runtime/Month |
-|-------|---------|---------------|
-| **1. Ingestion** | H5 → Parquet | 2-3 min |
-| **2. Preprocessing** | Clean & Feature Engineering | 10-15 min |
-| **3. Inference** | Model Predictions | 10-20 min |
-| **4. Monitoring** | Performance Tracking | 1-2 min |
+| Stage | Purpose | Runtime/Day | Notes |
+|-------|---------|-------------|-------|
+| **1. Ingestion** | H5 → Parquet | 2-3 min | Required |
+| **2. Preprocessing** | Clean & Feature Engineering | 10-15 min | Required |
+| **3. Training** | Model Training | 2-4 hours (GPU) | Optional (pre-trained models provided) |
+| **4. Inference** | Model Predictions | 10-20 min | Required |
+| **5. Monitoring** | Performance Tracking | 1-2 min | Required |
 
 ---
 
 ## 📁 Project Structure
 
+### Core Infrastructure
+
 ```
 MLE Proj LSTM/
-├── dags/                  # Airflow DAG definitions (8 files)
-├── scripts/
-│   ├── data/              # Raw H5 files (~3.5GB)
-│   ├── model_bank/        # Trained models & scalers
-│   ├── datamart/          # Medallion architecture (~50GB)
-│   ├── lstm/              # LSTM pipeline scripts
-│   └── xgboost/           # XGBoost pipeline scripts
-├── docs/                  # Documentation
-├── ARCHITECTURE.md        # System design (detailed)
-├── README.md              # This file (overview)
-└── docker-compose.yaml    # Orchestration config
+├── docker-compose.yaml         # CPU-only orchestration config
+├── docker-compose.gpu.yaml     # GPU-enabled orchestration config
+├── Dockerfile                  # CPU-only container image
+├── Dockerfile.gpu              # GPU-enabled container image
+├── dags/                       # Airflow DAG definitions (8 files)
+│   ├── dag_inference_lstm.py
+│   ├── dag_inference_xgboost.py
+│   ├── dag_monitoring_lstm.py
+│   ├── dag_monitoring_xgboost.py
+│   └── ... (shared DAGs)
+└── docs/                       # Documentation
 ```
+
+### Data & Models
+
+```
+scripts/
+├── data/                       # Raw H5 files (~30GB)
+│   ├── N-CMAPSS_DS_2025-01-01.h5
+│   ├── N-CMAPSS_DS_2025-01-02.h5
+│   └── ... (through 2025-01-10)
+├── datamart/                   # Medallion architecture (~50GB)
+│   ├── bronze/n_cmapss/        # Raw parquet (shared)
+│   ├── silver/n_cmapss/        # Cleaned data (shared)
+│   ├── gold/
+│   │   ├── lstm/               # LSTM features & labels
+│   │   └── xgboost/            # XGBoost features & labels
+│   └── inference/
+│       ├── lstm/               # LSTM predictions
+│       └── xgboost/            # XGBoost predictions
+└── model_bank/                 # Trained models & scalers
+    ├── darts_lstm_model.pkl            # LSTM model
+    ├── darts_lstm_model.pkl.ckpt       # LSTM checkpoint
+    ├── darts_target_scaler.pkl         # RUL scaler
+    ├── darts_covariate_scaler.pkl      # Feature scaler
+    ├── xgboost_rul_model.pkl           # XGBoost model
+    ├── feature_list.pkl                # XGBoost features
+    ├── lstm_monitoring_baseline.json   # LSTM baseline
+    └── xgboost_monitoring_baseline.json # XGBoost baseline
+```
+
+### LSTM Pipeline
+
+```
+scripts/lstm/
+├── 00_bronze_ingestion.py      # H5 → Parquet conversion
+├── 01_silver_preprocessing.py  # Data cleaning
+├── 02_gold_feature_label.py    # Sequence creation (30 cycles)
+├── 03_model_training.py        # LSTM training (GPU-accelerated)
+├── 04_model_inference.py       # Batch prediction
+└── 05_model_monitoring.py      # Drift detection & metrics
+```
+
+### XGBoost Pipeline
+
+```
+scripts/xgboost/
+├── 00_bronze_ingestion.py      # H5 → Parquet conversion
+├── 01_silver_preprocessing.py  # Data cleaning
+├── 02_gold_feature_label.py    # Feature engineering (96 features)
+├── 03_model_training.py        # XGBoost training (CPU)
+├── 04_model_inference.py       # Batch prediction
+└── 05_model_monitoring.py      # Drift detection & metrics
+```
+
+### Key Differences Between Models
+
+| Component | LSTM | XGBoost |
+|-----------|------|---------|
+| **Input** | 12 sensors × 30 timesteps | 96 engineered features |
+| **Training** | GPU-accelerated (2-4 hours) | CPU-only (15-30 min) |
+| **Feature Engineering** | Minimal (sequences only) | Extensive (rolling stats, lags) |
+| **Model Format** | `.pkl` (DARTS framework) | `.pkl` (pickle) |
+| **Best For** | Temporal patterns | Feature interactions |
 
 ---
 
@@ -129,8 +340,8 @@ MLE Proj LSTM/
 
 | Model | Features | RMSE | MAE | Training Time |
 |-------|----------|------|-----|---------------|
-| **LSTM** | 12 sensors, 30-cycle sequences | 0.10-0.15 | 0.03-0.05 | 2-4 hours (GPU) |
-| **XGBoost** | 96 engineered features | 0.08-0.15 | 0.03-0.05 | 15-30 min (CPU) |
+| **LSTM** | 12 sensors, 30-cycle sequences | 0.10-0.15 | 0.03-0.05 | 14 hours (GPU) |
+| **XGBoost** | 96 engineered features | 18 | 0.03-0.05 | 15-30 min (CPU) |
 
 ---
 
@@ -146,11 +357,12 @@ docker-compose up -d
 
 ### Memory Error
 
-1. Docker Desktop → Settings → Resources → Memory: 16GB+
+1. Docker Desktop → Settings → Resources → Memory: **48GB minimum** (see [Docker Memory Settings](#2-configure-docker-memory))
 2. Restart Docker
 3. Clear failed tasks:
+
    ```bash
-   docker exec mleprojlstm-airflow-scheduler-1 airflow tasks clear <dag_id> --yes --only-failed
+   docker exec mle-202508-team-awesome-tango-airflow-scheduler-1 airflow tasks clear <dag_id> --yes --only-failed
    ```
 
 ### Files Not Appearing
@@ -160,7 +372,7 @@ Ensure Docker has file sharing enabled for project directory.
 ### View Logs
 
 ```bash
-docker logs mleprojlstm-airflow-scheduler-1 --follow
+docker logs mle-202508-team-awesome-tango-airflow-scheduler-1 --follow
 ```
 
 For more issues, see full [README.md](README.md) Troubleshooting section.
@@ -172,9 +384,7 @@ For more issues, see full [README.md](README.md) Troubleshooting section.
 | Document | Description |
 |----------|-------------|
 | **README.md** | Project overview (original, comprehensive) |
-| **README_NEW.md** | This file - streamlined quick reference |
 | **ARCHITECTURE.md** | Complete system design and specifications |
-| **CLEANUP_SUMMARY.md** | Code cleanup work summary |
 | **docs/** | Detailed guides and methodologies |
 
 ---
@@ -182,6 +392,7 @@ For more issues, see full [README.md](README.md) Troubleshooting section.
 ## 👥 Team
 
 **MITB Project Team**:
+
 1. CHEN Tiancheng
 2. CHEN Zhiyang
 3. LIN Xiongqing
@@ -196,7 +407,7 @@ MIT License - See LICENSE file for details.
 
 ---
 
-**Last Updated**: January 2025  
+**Last Updated**: 6 Nov 2025
 **Version**: 2.0 (Production MLOps Pipeline)
 
 **Happy Predicting! 🚀✈️**

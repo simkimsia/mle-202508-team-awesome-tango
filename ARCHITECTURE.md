@@ -1,6 +1,7 @@
 # Aircraft Engine RUL Prediction - System Architecture
 
 ## Table of Contents
+
 1. [System Overview](#system-overview)
 2. [Data Architecture](#data-architecture)
 3. [Pipeline Architecture](#pipeline-architecture)
@@ -15,9 +16,11 @@
 ## System Overview
 
 ### Purpose
+
 Production-grade MLOps system for predicting Remaining Useful Life (RUL) of aircraft engines using the NASA N-CMAPSS dataset.
 
 ### Key Components
+
 - **Data Ingestion**: H5 to Parquet conversion (Bronze layer)
 - **Data Processing**: Cleaning and standardization (Silver layer)
 - **Feature Engineering**: Model-specific transformations (Gold layer)
@@ -26,6 +29,7 @@ Production-grade MLOps system for predicting Remaining Useful Life (RUL) of airc
 - **Monitoring**: Performance tracking and drift detection
 
 ### Technology Stack
+
 | Component | Technology | Version |
 |-----------|------------|---------|
 | Orchestration | Apache Airflow | 2.11.0 |
@@ -115,6 +119,7 @@ Production-grade MLOps system for predicting Remaining Useful Life (RUL) of airc
 ### Data Schema
 
 #### Bronze Layer
+
 ```
 ├── unit: int (engine identifier)
 ├── cycle: int (operational cycle)
@@ -128,6 +133,7 @@ Production-grade MLOps system for predicting Remaining Useful Life (RUL) of airc
 ```
 
 #### Silver Layer
+
 ```
 ├── dataset: string (DS01-DS08)
 ├── unit: string (formatted: DS01_001)
@@ -142,6 +148,7 @@ Production-grade MLOps system for predicting Remaining Useful Life (RUL) of airc
 ```
 
 #### Gold Layer (Label Base)
+
 ```
 ├── dataset: string
 ├── unit: string
@@ -259,6 +266,7 @@ Production-grade MLOps system for predicting Remaining Useful Life (RUL) of airc
 The system runs **two independent pipelines** for LSTM and XGBoost:
 
 #### LSTM Pipeline
+
 ```
 lstm_01_ingestion
     ↓
@@ -270,6 +278,7 @@ lstm_04_monitoring
 ```
 
 #### XGBoost Pipeline
+
 ```
 xgboost_01_ingestion
     ↓
@@ -334,13 +343,13 @@ Hyperparameters:
 ```
 Input Features (96 total):
   Base Features (12): Same 12 sensors
-  
+
   Rolling Window Features (84):
     For each base feature:
       - 5-cycle window: mean, std, acceleration
       - 15-cycle window: mean, std, acceleration
       - 30-cycle window: mean, std, acceleration
-      
+
     Total: 12 features × 7 statistics = 84 features
 
 Architecture:
@@ -625,11 +634,13 @@ MLE Proj LSTM/
 
 **Script**: `bronze_ncmapss.py`
 
-**Input**: 
+**Input**:
+
 - H5 file path: `scripts/data/N-CMAPSS_DS_{date}.h5`
 - Snapshot date: YYYY-MM-DD
 
 **Processing**:
+
 1. Open HDF5 file
 2. Read dev/test splits
 3. Extract arrays: W, X_s, X_v, T, Y, A
@@ -638,11 +649,13 @@ MLE Proj LSTM/
 6. Write to Parquet (single file per snapshot)
 
 **Output**:
+
 - Path: `datamart/bronze/n_cmapss/snapshot_date={date}/data.parquet`
 - Format: Parquet (snappy compression)
 - Size: ~1.75 GB per snapshot
 
 **Performance**:
+
 - Runtime: 2-3 minutes per snapshot
 - Memory: ~4GB peak
 
@@ -653,9 +666,11 @@ MLE Proj LSTM/
 **Script**: `silver_ncmapss.py`
 
 **Input**:
+
 - Bronze parquet: `datamart/bronze/n_cmapss/snapshot_date={date}/`
 
 **Processing** (PySpark):
+
 1. Read Bronze Parquet
 2. Explode nested arrays to columns
 3. Apply z-score normalization to sensors
@@ -664,11 +679,13 @@ MLE Proj LSTM/
 6. Partition by snapshot_date
 
 **Output**:
+
 - Path: `datamart/silver/n_cmapss/snapshot_date={date}/`
 - Format: Partitioned Parquet
 - Size: ~1.78 GB per snapshot
 
 **Performance**:
+
 - Runtime: 3-5 minutes per snapshot
 - Memory: 4GB driver, 4GB executor
 
@@ -679,9 +696,11 @@ MLE Proj LSTM/
 **Script**: `gold_label_base_ncmapss.py`
 
 **Input**:
+
 - Silver parquet: `datamart/silver/n_cmapss/snapshot_date={date}/`
 
 **Processing**:
+
 1. Read Silver data
 2. Calculate max cycle per unit
 3. Clip RUL at 90 cycles: `hs = min(max_cycle - cycle, 90)`
@@ -689,11 +708,13 @@ MLE Proj LSTM/
 5. Select 12 key sensor features
 
 **Output**:
+
 - Path: `datamart/gold/label_base/n_cmapss/snapshot_date={date}/`
 - Format: Partitioned Parquet
 - Size: ~500 MB per snapshot
 
 **Performance**:
+
 - Runtime: 1-2 minutes per snapshot
 - Memory: ~2GB
 
@@ -704,22 +725,26 @@ MLE Proj LSTM/
 **Script**: `gold_feature_lstm_ncmapss.py`
 
 **Input**:
+
 - Gold label base: `datamart/gold/label_base/n_cmapss/snapshot_date={date}/`
 
 **Processing**:
+
 1. Read label base Parquet
 2. Select 12 sensor features
 3. Convert to Darts TimeSeries objects (one per unit)
 4. Save as pickle files
 
 **Output**:
+
 - Path: `datamart/gold/feature/lstm/n_cmapss/snapshot_date={date}/`
-- Files: 
+- Files:
   - `covariates.pkl` (list of TimeSeries)
   - `units.pkl` (list of unit IDs)
 - Size: ~200 MB per snapshot
 
 **Performance**:
+
 - Runtime: 2-3 minutes per snapshot
 - Memory: ~3GB
 
@@ -730,9 +755,11 @@ MLE Proj LSTM/
 **Script**: `gold_feature_xgboost_ncmapss.py`
 
 **Input**:
+
 - Gold label base: `datamart/gold/label_base/n_cmapss/snapshot_date={date}/`
 
 **Processing**:
+
 1. Read label base Parquet
 2. For each of 12 base features:
    - Calculate rolling mean (5, 15, 30 cycles)
@@ -742,11 +769,13 @@ MLE Proj LSTM/
 4. Total: 12 base + 84 engineered = 96 features
 
 **Output**:
+
 - Path: `datamart/gold/feature/xgboost/n_cmapss/snapshot_date={date}/`
 - Format: Parquet
 - Size: ~800 MB per snapshot
 
 **Performance**:
+
 - Runtime: 5-10 minutes per snapshot
 - Memory: ~6GB peak
 
@@ -757,12 +786,14 @@ MLE Proj LSTM/
 **Script**: `inference_lstm_ncmapss.py`
 
 **Input**:
+
 - LSTM features: `datamart/gold/feature/lstm/n_cmapss/snapshot_date={date}/`
 - LSTM labels: `datamart/gold/label/lstm/n_cmapss/snapshot_date={date}/`
 - Model: `model_bank/darts_lstm_model.pkl`
 - Scalers: `model_bank/darts_*_scaler.pkl`
 
 **Processing**:
+
 1. Load model and scalers
 2. Load TimeSeries features and labels
 3. Scale features and labels
@@ -771,11 +802,13 @@ MLE Proj LSTM/
 6. Calculate RMSE/MAE
 
 **Output**:
+
 - Path: `datamart/inference/lstm/n_cmapss/snapshot_date={date}/predictions.parquet`
 - Columns: unit, dataset, time, RUL_Predicted, RUL_Actual, Prediction_Error
 - Size: ~50 MB per snapshot
 
 **Performance**:
+
 - Runtime: 5-15 minutes per snapshot
 - Memory: ~4GB (CPU) or 8GB (GPU)
 - GPU: 2-3x faster if available
@@ -787,22 +820,26 @@ MLE Proj LSTM/
 **Script**: `inference_xgboost_ncmapss.py`
 
 **Input**:
+
 - XGBoost features: `datamart/gold/feature/xgboost/n_cmapss/snapshot_date={date}/`
 - XGBoost labels: `datamart/gold/label/xgboost/n_cmapss/snapshot_date={date}/`
 - Model: `model_bank/xgboost_rul_model.pkl`
 
 **Processing**:
+
 1. Load XGBoost model
 2. Load features and labels
 3. Run batch predictions
 4. Calculate RMSE/MAE
 
 **Output**:
+
 - Path: `datamart/inference/xgboost/n_cmapss/snapshot_date={date}/predictions.parquet`
 - Columns: unit, dataset, cycle, RUL_Predicted, RUL_Actual, Prediction_Error
 - Size: ~100 MB per snapshot
 
 **Performance**:
+
 - Runtime: 2-5 minutes per snapshot
 - Memory: ~3GB
 
@@ -810,14 +847,17 @@ MLE Proj LSTM/
 
 ### Monitoring
 
-**Scripts**: 
+**Scripts**:
+
 - `monitor_lstm_ncmapss.py`
 - `monitor_xgboost_ncmapss.py`
 
 **Input**:
+
 - Inference results: `datamart/inference/{lstm|xgboost}/n_cmapss/snapshot_date={date}/`
 
 **Processing**:
+
 1. Load predictions
 2. Calculate overall metrics (RMSE, MAE)
 3. Calculate per-dataset/per-unit metrics
@@ -827,6 +867,7 @@ MLE Proj LSTM/
 7. Save JSON reports
 
 **Output**:
+
 - Path: `datamart/monitoring/{lstm|xgboost}/n_cmapss/snapshot_date={date}/`
 - Files:
   - `{model}_monitoring_report.json` (metrics)
@@ -834,6 +875,7 @@ MLE Proj LSTM/
 - Size: ~1-5 MB per snapshot
 
 **Performance**:
+
 - Runtime: 1-2 minutes per snapshot
 - Memory: ~2GB
 
@@ -874,16 +916,19 @@ open http://localhost:8080
 ### Scaling Considerations
 
 **Horizontal Scaling**:
+
 - Add Airflow workers with Celery executor
 - Use PostgreSQL for task queue (current: SQLite)
 - Deploy on Kubernetes for auto-scaling
 
 **Vertical Scaling**:
+
 - Increase Docker memory limit (16GB recommended)
 - Allocate more CPU cores to Spark executor
 - Use GPU-enabled container for LSTM
 
 **Data Partitioning**:
+
 - Process datasets independently (DS01-DS08)
 - Parallel processing of monthly snapshots
 - Batch inference by engine units
@@ -903,6 +948,7 @@ open http://localhost:8080
 ## Monitoring & Observability
 
 **Airflow Logs**:
+
 ```bash
 # View scheduler logs
 docker logs mleprojlstm-airflow-scheduler-1 --follow
@@ -913,11 +959,13 @@ docker exec mleprojlstm-airflow-scheduler-1 \
 ```
 
 **Performance Metrics**:
+
 - Task duration: Airflow UI → Graph View
 - Data sizes: Check datamart directories
 - Model metrics: Review monitoring JSON reports
 
 **Alerts**:
+
 - Configure Airflow email alerts on task failure
 - Set up threshold alerts for model performance degradation
 - Monitor disk space usage
@@ -930,6 +978,6 @@ Common issues and solutions are documented in `README.md` under the Troubleshoot
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: January 2025  
+**Document Version**: 1.0
+**Last Updated**: Nov 2025
 **Maintained By**: Justin Ng from Group 10
