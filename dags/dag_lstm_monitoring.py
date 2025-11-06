@@ -21,9 +21,9 @@ with DAG(
     "lstm_04_monitoring",
     default_args=default_args,
     description="LSTM Pipeline Stage 4: Model performance monitoring",
-    schedule_interval="0 3 1 * *",  # Monthly at 03:00 (after inference)
+    schedule_interval="0 0 * * *",  # daily
     start_date=datetime(2025, 1, 1),
-    end_date=datetime(2025, 10, 31),
+    end_date=datetime(2025, 1, 10),  # cut off at 10th Jan
     catchup=True,
     tags=["lstm", "monitoring"],
 ) as dag:

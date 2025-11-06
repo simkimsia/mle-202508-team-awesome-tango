@@ -14,9 +14,9 @@ with DAG(
     "lstm_02_preprocessing",
     default_args=default_args,
     description="LSTM Pipeline Stage 2: Data cleaning and TimeSeries creation",
-    schedule_interval="0 1 1 * *",
+    schedule_interval="0 0 * * *",  # daily
     start_date=datetime(2025, 1, 1),
-    end_date=datetime(2025, 10, 31),
+    end_date=datetime(2025, 1, 10),  # cut off at 10th Jan
     catchup=True,
     tags=["lstm", "preprocessing", "silver", "gold"],
 ) as dag:

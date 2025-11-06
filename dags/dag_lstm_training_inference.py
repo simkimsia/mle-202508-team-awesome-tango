@@ -94,9 +94,9 @@ with DAG(
     "lstm_03_training_inference",
     default_args=default_args,
     description="LSTM Pipeline Stage 3: Model training (if needed) and inference",
-    schedule_interval="0 2 1 * *",  # Monthly at 02:00 (after preprocessing)
+    schedule_interval="0 0 * * *",  # daily
     start_date=datetime(2025, 1, 1),
-    end_date=datetime(2025, 10, 31),
+    end_date=datetime(2025, 1, 10),  # cut off at 10th Jan
     catchup=True,
     tags=["lstm", "training", "inference"],
 ) as dag:
