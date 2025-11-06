@@ -388,7 +388,7 @@ docker-compose restart
 
 **Runtime**: 5-10 minutes per file
 
-**🎥 [Watch DAG Walkthrough - Loom](https://www.loom.com/share/b1f7445c96974b69a96f9d173507257e)**
+**🎥 [Watch DAG Walkthrough for xgboost preprocessing - Loom](https://www.loom.com/share/b1f7445c96974b69a96f9d173507257e)**
 
 ---
 
@@ -412,9 +412,9 @@ docker-compose restart
 **Runtime**:
 
 - Training: ~1 hour - only runs once if model missing
-- Inference: 10-20 minutes per day
+- Inference: 1-2 minutes per day
 
-**🎥 [Watch DAG Walkthrough - Loom]()**
+**🎥 [Watch DAG Walkthrough for XGBoost inference predictions - Loom](https://www.loom.com/share/585151f7c304423f897c3ee188a32b6a)**
 
 ---
 
