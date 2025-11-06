@@ -304,7 +304,7 @@ docker-compose restart
 - Cleans Bronze data (removes duplicates, handles missing values)
 - Creates TimeSeries format for LSTM model
 - Generates Gold layer with features and labels
-- Saves to: `scripts/datamart/gold/lstm/`
+- Saves to: `scripts/datamart/gold/feature/lstm/`, `scripts/datamart/gold/label/lstm/`, `scripts/datamart/gold/label_base/lstm/`
 
 **Runtime**: 10-15 minutes per file
 
@@ -319,7 +319,7 @@ docker-compose restart
 **What it does**:
 
 - **Training** (only if model missing):
-  - Loads data from Gold layer: `scripts/datamart/gold/lstm/`
+  - Loads data from Gold layer: `scripts/datamart/gold/feature/lstm/`, `scripts/datamart/gold/label/lstm/`, `scripts/datamart/gold/label_base/lstm/`
   - Trains LSTM model with 30-cycle sequences
   - Saves model artifacts to `scripts/model_bank/`
     - `darts_lstm_model.pkl`
@@ -384,11 +384,11 @@ docker-compose restart
 - Cleans Bronze data (removes duplicates, handles missing values)
 - Engineers 96 features (rolling stats, lags, interactions)
 - Generates Gold layer with features and labels
-- Saves to: `scripts/datamart/gold/xgboost/`
+- Saves to: `scripts/datamart/gold/feature/xgboost/`, `scripts/datamart/gold/label/xgboost/`, `scripts/datamart/gold/label_base/xgboost/`
 
 **Runtime**: 5-10 minutes per file
 
-**🎥 [Watch DAG Walkthrough - Loom]()**
+**🎥 [Watch DAG Walkthrough - Loom](https://www.loom.com/share/b1f7445c96974b69a96f9d173507257e)**
 
 ---
 
@@ -399,7 +399,7 @@ docker-compose restart
 **What it does**:
 
 - **Training** (only if model missing):
-  - Loads data from Gold layer: `scripts/datamart/gold/xgboost/`
+  - Loads data from Gold layer: `scripts/datamart/gold/feature/xgboost/`, `scripts/datamart/gold/label/xgboost/`, `scripts/datamart/gold/label_base/xgboost/`
   - Trains XGBoost model with 96 engineered features
   - Saves model artifacts to `scripts/model_bank/`
     - `xgboost_rul_model.pkl`
