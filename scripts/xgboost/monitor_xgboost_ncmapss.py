@@ -8,22 +8,27 @@ For a given snapshot date this script:
 The script is designed to be invoked from Airflow:
     python3 monitor_xgboost_ncmapss.py --snapshotdate "2025-01-09"
 """
+
 import argparse
 import base64
 import json
 import os
 from datetime import datetime, timezone
-from io import BytesIO
 from typing import Dict, Tuple
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
 try:
-    from mlflow_config import log_inference_metrics, init_mlflow
+    from mlflow_config import init_mlflow, log_inference_metrics
+
     MLFLOW_AVAILABLE = True
 except ImportError:
     print("⚠️  MLflow not available. Monitoring will proceed without MLflow logging.")
     MLFLOW_AVAILABLE = False
+
+
 def _load_baseline_config() -> Dict[str, Dict[str, float]]:
     """Load baseline metrics and thresholds for drift detection."""
     # model_bank is in scripts/, not scripts/xgboost/
@@ -40,27 +45,33 @@ def _load_baseline_config() -> Dict[str, Dict[str, float]]:
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
     required_sections = ["baseline", "thresholds"]
-    missing_sections = [section for section in required_sections if section not in config]
+    missing_sections = [
+        section for section in required_sections if section not in config
+    ]
     if missing_sections:
         raise ValueError(
             f"Baseline config missing section(s): {missing_sections}. "
             "Expected keys: 'baseline', 'thresholds'."
         )
     return config
+
+
 def _build_base_paths() -> Dict[str, str]:
     """Return all base directories used by the monitoring script."""
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return {
-        "predictions": os.path.join(
-            base_dir, "datamart/inference/xgboost/n_cmapss"
-        ),
+        "predictions": os.path.join(base_dir, "datamart/inference/xgboost/n_cmapss"),
         "labels": os.path.join(base_dir, "datamart/gold/label/xgboost/n_cmapss"),
         "metrics": os.path.join(base_dir, "datamart/monitoring/xgboost/n_cmapss"),
-        "reports": os.path.join(base_dir, "docs/monitoring/xgboost"),
+        "reports": os.path.join(base_dir, "reports/monitoring/xgboost"),
     }
+
+
 def _path_for_snapshot(base_path: str, snapshot_date: str, filename: str) -> str:
     """Construct a snapshot-specific path inside a partitioned directory."""
     return os.path.join(base_path, f"snapshot_date={snapshot_date}", filename)
+
+
 def _files_exist(predictions_path: str, labels_path: str) -> bool:
     """Check that both required parquet files exist."""
     missing = []
@@ -75,6 +86,8 @@ def _files_exist(predictions_path: str, labels_path: str) -> bool:
         print("Ensure inference and label generation steps have completed.\n")
         return False
     return True
+
+
 def _load_inputs(
     predictions_path: str, labels_path: str
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -86,6 +99,8 @@ def _load_inputs(
     df_label = pd.read_parquet(labels_path, engine="pyarrow")
     print(f"  ✓ Loaded {len(df_label):,} label rows")
     return df_pred, df_label
+
+
 def _merge_predictions_labels(
     df_pred: pd.DataFrame, df_label: pd.DataFrame
 ) -> pd.DataFrame:
@@ -93,7 +108,11 @@ def _merge_predictions_labels(
     merge_cols = ["unit", "time"]
     if "dataset" in df_pred.columns and "dataset" in df_label.columns:
         merge_cols.append("dataset")
-    df_pred = df_pred.drop(columns=[col for col in ["RUL_Actual", "Prediction_Error"] if col in df_pred.columns])
+    df_pred = df_pred.drop(
+        columns=[
+            col for col in ["RUL_Actual", "Prediction_Error"] if col in df_pred.columns
+        ]
+    )
     missing_pred_cols = [col for col in merge_cols if col not in df_pred.columns]
     if missing_pred_cols:
         raise ValueError(
@@ -117,12 +136,16 @@ def _merge_predictions_labels(
     df_pred = df_pred.drop_duplicates(subset=merge_cols, keep="first")
     pred_dropped = pred_before - len(df_pred)
     if pred_dropped > 0:
-        print(f"  • Dropped {pred_dropped:,} duplicate prediction rows based on {merge_cols}")
+        print(
+            f"  • Dropped {pred_dropped:,} duplicate prediction rows based on {merge_cols}"
+        )
     label_before = len(df_label)
     df_label = df_label.drop_duplicates(subset=merge_cols, keep="first")
     label_dropped = label_before - len(df_label)
     if label_dropped > 0:
-        print(f"  • Dropped {label_dropped:,} duplicate label rows based on {merge_cols}")
+        print(
+            f"  • Dropped {label_dropped:,} duplicate label rows based on {merge_cols}"
+        )
     merged = df_pred.merge(
         df_label[merge_cols + ["RUL_Actual"]],
         on=merge_cols,
@@ -137,6 +160,8 @@ def _merge_predictions_labels(
         )
     merged["RUL_Actual"] = merged["RUL_Actual"].astype("float32")
     return merged
+
+
 def _calculate_metrics(df: pd.DataFrame) -> Dict[str, float]:
     """Compute monitoring metrics from the merged dataframe."""
     if "RUL_Actual" not in df.columns or "RUL_Predicted" not in df.columns:
@@ -158,6 +183,8 @@ def _calculate_metrics(df: pd.DataFrame) -> Dict[str, float]:
     print(f"  MAE:  {metrics['mae']:.4f}")
     print(f"  Rows: {metrics['prediction_count']:,}")
     return metrics
+
+
 def _evaluate_drift(
     metrics: Dict[str, float], baseline_config: Dict[str, Dict[str, float]]
 ) -> Dict[str, str]:
@@ -175,17 +202,13 @@ def _evaluate_drift(
     reason = "Within baseline thresholds."
     if rmse > rmse_critical:
         status = "critical"
-        reason = (
-            f"RMSE {rmse:.2f} exceeds critical threshold ({rmse_critical:.2f})."
-        )
+        reason = f"RMSE {rmse:.2f} exceeds critical threshold ({rmse_critical:.2f})."
     elif rmse > rmse_warning:
         status = "warning"
         reason = f"RMSE {rmse:.2f} exceeds warning threshold ({rmse_warning:.2f})."
     elif mae > mae_critical:
         status = "critical"
-        reason = (
-            f"MAE {mae:.2f} exceeds critical threshold ({mae_critical:.2f})."
-        )
+        reason = f"MAE {mae:.2f} exceeds critical threshold ({mae_critical:.2f})."
     elif mae > mae_warning:
         status = "warning"
         reason = f"MAE {mae:.2f} exceeds warning threshold ({mae_warning:.2f})."
@@ -200,6 +223,8 @@ def _evaluate_drift(
         "mae_warning_threshold": mae_warning,
         "mae_critical_threshold": mae_critical,
     }
+
+
 def _update_metrics_history(
     metrics_base: str,
     snapshot_date: str,
@@ -223,9 +248,13 @@ def _update_metrics_history(
     else:
         history = pd.DataFrame([record])
     history.sort_values("snapshot_date", inplace=True)
-    history.to_parquet(history_path, index=False, engine="pyarrow", compression="snappy")
+    history.to_parquet(
+        history_path, index=False, engine="pyarrow", compression="snappy"
+    )
     print(f"\n✅ Metrics history updated at {history_path}")
     return history
+
+
 def _persist_snapshot_artifacts(
     metrics_base: str,
     snapshot_date: str,
@@ -241,9 +270,7 @@ def _persist_snapshot_artifacts(
     with open(metrics_path, "w", encoding="utf-8") as f:
         json.dump(metrics_payload, f, indent=2)
     residuals_path = os.path.join(snapshot_dir, "residuals.parquet")
-    residuals_df = merged_df[
-        ["unit", "time", "RUL_Predicted", "RUL_Actual"]
-    ].copy()
+    residuals_df = merged_df[["unit", "time", "RUL_Predicted", "RUL_Actual"]].copy()
     residuals_df["residual"] = (
         residuals_df["RUL_Predicted"] - residuals_df["RUL_Actual"]
     ).astype("float32")
@@ -252,6 +279,8 @@ def _persist_snapshot_artifacts(
     )
     print(f"  • Snapshot metrics saved to {metrics_path}")
     print(f"  • Residuals saved to {residuals_path}")
+
+
 def _generate_report(
     reports_base: str,
     snapshot_date: str,
@@ -347,6 +376,8 @@ def _generate_report(
     with open(html_path, "w", encoding="utf-8") as f_html:
         f_html.write(html_content)
     print(f"  • HTML report saved to {html_path}")
+
+
 def main(snapshotdate: str) -> None:
     print("\n\n--- Starting XGBoost monitoring job ---\n")
     paths = _build_base_paths()
@@ -361,19 +392,25 @@ def main(snapshotdate: str) -> None:
     merged_df = _merge_predictions_labels(df_pred, df_label)
     metrics = _calculate_metrics(merged_df)
     drift_info = _evaluate_drift(metrics, baseline_config)
-    history = _update_metrics_history(paths["metrics"], snapshotdate, metrics, drift_info)
-    _persist_snapshot_artifacts(paths["metrics"], snapshotdate, metrics, merged_df, drift_info)
+    history = _update_metrics_history(
+        paths["metrics"], snapshotdate, metrics, drift_info
+    )
+    _persist_snapshot_artifacts(
+        paths["metrics"], snapshotdate, metrics, merged_df, drift_info
+    )
     _generate_report(paths["reports"], snapshotdate, history, merged_df, drift_info)
     if MLFLOW_AVAILABLE:
         try:
             log_inference_metrics(
                 snapshot_date=snapshotdate,
                 metrics=metrics,
-                drift_status=drift_info['status']
+                drift_status=drift_info["status"],
             )
         except Exception as e:
             print(f"⚠️  Could not log to MLflow: {e}")
     print("\n--- Completed XGBoost monitoring job ---\n\n")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Monitor XGBoost RUL predictions for the N-CMAPSS dataset"
